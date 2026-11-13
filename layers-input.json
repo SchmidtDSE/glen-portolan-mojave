@@ -133,7 +133,7 @@
     },
     "plugins": [
         {
-            "url": "https://cdn.jsdelivr.net/gh/SchmidtDSE/glen@v3.47.0/core/plugins/mcp.js",
+            "url": "https://cdn.jsdelivr.net/gh/SchmidtDSE/glen@v3.51.1/core/plugins/mcp.js",
             "options": {
                 "servers": [
                     {
