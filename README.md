@@ -102,6 +102,7 @@ plugins/                the worker file that starts geo-query-wasm
 inspect_collection.py   prints what the app will draw from a catalog or collection
 AGENTS.md               the configuration reference, for people and coding agents
 .github/workflows/      deploys the repository to GitHub Pages on every push to main
+.devcontainer/          an optional dev container: a pixi environment with serve and inspect tasks
 ```
 
 You configure the app by editing `layers-input.json` and the title in `index.html`. You do not write JavaScript; `plugins/geo-query-worker.js` works unchanged over any catalog.
@@ -113,6 +114,15 @@ python -m http.server 8000
 ```
 
 Open http://localhost:8000 and enter an OpenRouter key under the settings button in the chat panel. The browser console reports how many collections and layers loaded, and names any collection the app could not read or found nothing to draw in.
+
+The app needs nothing else at runtime. For development, `.devcontainer/` holds a pixi environment with Python and `pmtiles`, and a Dockerfile built on the pixi image. Open the repository in VS Code with **Dev Containers: Reopen in Container**, or in a GitHub Codespace, and it runs `pixi run serve` and opens the app in your browser. In its terminal, `pixi run inspect <url>` runs `inspect_collection.py`.
+
+Without VS Code, build the image and mount the repository:
+
+```bash
+docker build -t glen-portolan-dev .devcontainer
+docker run --rm -p 8000:8000 -v "$PWD":/workspace glen-portolan-dev
+```
 
 ## Models and keys
 

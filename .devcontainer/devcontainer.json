@@ -1,0 +1,13 @@
+{
+    "name": "glen-portolan",
+    "build": { "dockerfile": "Dockerfile" },
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+    "workspaceFolder": "/workspace",
+    "containerEnv": {
+        "PIXI_PROJECT_MANIFEST": "${containerWorkspaceFolder}/.devcontainer/pixi.toml"
+    },
+    "forwardPorts": [8000],
+    "portsAttributes": {
+        "8000": { "label": "App", "onAutoForward": "openBrowser" }
+    }
+}
