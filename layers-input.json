@@ -1,134 +1,106 @@
 {
     "titiler_url": "https://titiler.nrp-nautilus.io",
-    "view": {
-        "center": [
-            -90.245,
-            38.635
-        ],
-        "zoom": 11.2
-    },
     "links": {
-        "github": "https://github.com/SchmidtDSE/glen-portolan-template"
+        "github": "https://github.com/SchmidtDSE/glen-portolan-mojave"
     },
-    "default_basemap": "plain",
+    "default_basemap": "natgeo",
+    "view": {
+        "center": [-116.33, 34.07],
+        "zoom": 13
+    },
     "collections": [
         {
-            "url": "https://data.source.coop/tge-labs/st-louis-open-data-mirror/urban-development-and-planning/neighborhoods/collection.json",
-            "display_name": "Neighborhoods",
-            "group": "Boundaries",
-            "style": "styles/style-boundaries",
+            "url": "https://storage.googleapis.com/dse-nps-fire-severity-storage/v2/fires/eureka-9c3382ee/eureka-9c3382ee/collection.json",
+            "display_name": "Eureka fire burn severity",
+            "group": "Eureka fire (2025)",
+            "colormap": "rdylgn_r",
+            "items": [
+                {
+                    "id": "severity",
+                    "assets": [
+                        {
+                            "id": "rbr",
+                            "display_name": "Burn severity: RBR",
+                            "visible": true,
+                            "rescale": "0,0.5"
+                        },
+                        {
+                            "id": "dnbr",
+                            "display_name": "Burn severity: dNBR",
+                            "rescale": "-0.1,0.66"
+                        },
+                        {
+                            "id": "rdnbr",
+                            "display_name": "Burn severity: RdNBR",
+                            "rescale": "0,0.8"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "url": "https://s3-west.nrp-nautilus.io/public-fire/calfire-2025/firep/stac-collection.json",
+            "id": "eureka-perimeter",
+            "display_name": "Eureka fire perimeter (CAL FIRE)",
+            "group": "Eureka fire (2025)",
             "visible": true,
+            "default_filter": ["all",
+                ["==", ["get", "FIRE_NAME"], "EUREKA"],
+                ["==", ["get", "YEAR_"], 2025]
+            ],
+            "default_style": {
+                "fill-color": "#000000",
+                "fill-opacity": 0
+            },
+            "outline_style": {
+                "line-color": "#212121",
+                "line-width": 2
+            },
             "tooltip": [
-                "NHD_NAME",
-                "NHD_NUM"
+                "FIRE_NAME",
+                "YEAR_",
+                "ALARM_DATE",
+                "GIS_ACRES",
+                "UNIT_ID"
             ]
         },
         {
-            "url": "https://data.source.coop/tge-labs/st-louis-open-data-mirror/government/wards/collection.json",
-            "display_name": "Wards (2020)",
-            "group": "Boundaries",
-            "style": "styles/style-boundaries",
-            "tooltip": [
-                "DISTRICT"
-            ]
-        },
-        {
-            "url": "https://data.source.coop/tge-labs/st-louis-open-data-mirror/demographics/holc-redlining/collection.json",
-            "display_name": "HOLC redlining grades (1930s)",
-            "group": "History",
-            "tooltip": [
-                "label",
-                "grade",
-                "category"
-            ]
-        },
-        {
-            "url": "https://data.source.coop/tge-labs/st-louis-open-data-mirror/housing/market-value-analysis/collection.json",
-            "display_name": "Market value analysis (2024)",
-            "group": "Housing",
-            "visible": true,
-            "tooltip": [
-                "MVACluster",
-                "MSP2123_CA",
-                "PVacBuild"
-            ]
-        },
-        {
-            "url": "https://data.source.coop/tge-labs/st-louis-open-data-mirror/urban-development-and-planning/vacancy-composite/collection.json",
-            "display_name": "Vacant parcels",
-            "group": "Housing",
-            "tooltip": [
-                "STREET_ADD",
-                "PROPERTY_T",
-                "OWNER_NAME",
-                "YEAR_BUILT"
-            ]
-        },
-        {
-            "url": "https://data.source.coop/tge-labs/st-louis-open-data-mirror/urban-development-and-planning/parcels/collection.json",
-            "display_name": "Parcels by assessed value",
-            "group": "Housing",
-            "style": "styles/style-assessed-value",
-            "tooltip": [
-                "SITEADDR",
-                "AsdTotal",
-                "FirstYearBuilt",
-                "Zoning"
-            ]
-        },
-        {
-            "url": "https://data.source.coop/tge-labs/st-louis-open-data-mirror/demographics/acs-tracts/collection.json",
-            "display_name": "Census tracts (ACS)",
-            "group": "People",
-            "tooltip": [
-                "geoid",
-                "population",
-                "median_hh_income",
-                "pct_below_poverty"
-            ]
-        },
-        {
-            "url": "https://s3-west.nrp-nautilus.io/public-population/ghs-pop-2020/stac-collection.json",
-            "display_name": "Population in 2020 (GHS-POP)",
-            "group": "People",
-            "colormap": "magma",
-            "rescale": "0,60",
-            "opacity": 0.8
-        },
-        {
-            "url": "https://data.source.coop/tge-labs/st-louis-open-data-mirror/health/lead-service-lines/collection.json",
-            "display_name": "Lead service lines",
-            "group": "Health",
-            "tooltip": [
-                "address",
-                "utilstatus_desc",
-                "utilmaterial_desc"
-            ]
-        },
-        {
-            "url": "https://data.source.coop/tge-labs/st-louis-open-data-mirror/law-safety-and-justice/tornado-damage-2025/collection.json",
-            "display_name": "May 2025 tornado damage",
-            "group": "Hazards",
-            "tooltip": [
-                "efscale",
-                "damage_txt",
-                "windspeed"
-            ]
-        },
-        {
-            "url": "https://data.source.coop/tge-labs/st-louis-open-data-mirror/environment/floodplain/collection.json",
-            "display_name": "Floodplain",
-            "group": "Hazards",
-            "style": "styles/style-sfha",
-            "tooltip": [
-                "FLD_ZONE",
-                "SFHA_TF"
+            "url": "https://jotr-nps-portolan.org/jotr-vegmap/collection.json",
+            "display_name": "JOTR vegetation map",
+            "group": "Joshua Tree NP",
+            "items": [
+                {
+                    "id": "park-boundary",
+                    "display_name": "Park boundary",
+                    "visible": true,
+                    "default_style": {
+                        "fill-color": "#000000",
+                        "fill-opacity": 0
+                    },
+                    "outline_style": {
+                        "line-color": "#5D4037",
+                        "line-width": 2
+                    },
+                    "tooltip": [
+                        "Park_Name",
+                        "Acres"
+                    ]
+                },
+                {
+                    "id": "vegetation-map",
+                    "display_name": "Vegetation map units",
+                    "tooltip": [
+                        "MapUnit_Name",
+                        "MapUnit_ID",
+                        "Acres"
+                    ]
+                }
             ]
         }
     ],
     "sidebar": {
         "enabled": true,
-        "title": "St. Louis open data",
+        "title": "Joshua Tree NP: Eureka fire",
         "chat_title": "Chat"
     },
     "plugins": [
@@ -173,13 +145,11 @@
         ]
     },
     "welcome": {
-        "message": "I can show, filter and colour the layers on this map of St. Louis, and run SQL over their data in your browser. Try asking:",
+        "message": "I can show, recolour and compare the Eureka fire (2025) burn-severity maps in Joshua Tree, and the Joshua Tree vegetation map. Try asking:",
         "examples": [
-            "Show the 1930s redlining grades over the 2024 market value clusters",
-            "Which ten neighborhoods have the most vacant parcels?",
-            "How many people live in each ward, from the 2020 population grid?",
-            "How many service lines are lead, and how many are still unknown?",
-            "Show the May 2025 tornado damage coloured by EF scale and zoom to it"
+            "Switch from RBR to dNBR",
+            "Recolour the RBR layer with magma from 0 to 0.4",
+            "Show only the Joshua Tree Woodland Alliance polygons"
         ]
     }
 }
