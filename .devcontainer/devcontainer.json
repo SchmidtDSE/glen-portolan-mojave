@@ -2,7 +2,11 @@
     "name": "glen-portolan",
     "build": { "dockerfile": "Dockerfile" },
     "features": {
-        "ghcr.io/devcontainers/features/github-cli:1": {}
+        "ghcr.io/devcontainers/features/github-cli:1": {},
+        "ghcr.io/devcontainers/features/common-utils:2": {
+            "installZsh": false,
+            "upgradePackages": false
+        }
     },
     "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
     "workspaceFolder": "/workspace",
