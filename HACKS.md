@@ -86,3 +86,24 @@ collection-level Parquet `data` assets for SQL.
 |---|---|---|
 | Every layer listed under `items` (vegetation and Eureka severity) | Both catalogs keep their data in items. glen core draws item assets only when `items` names them (needs glen ≥ v3.51.1, hence the pin bump) | glen drawing item assets without config, or the catalogs publishing collection-level assets |
 | SQL sees no vegetation or severity tables (only the CAL FIRE `firep.parquet`) | The vegetation Parquet files are item assets, and severity is COG only | glen listing item Parquet assets for the vegetation tables; Rung 2's `zonal_stats` for the severity COGs |
+
+## Blocked on geo-query-wasm releasing `histogram`
+
+**Blocker:** `zonal_stats` in geo-query-wasm v0.6.0 has no `histogram` statistic, which the
+"area with RBR ≥ 0.5" questions need. The change is in `plugins/geo-query-wasm/histogram.patch`,
+ready to go upstream as a PR.
+
+**Check it has cleared:** a geo-query-wasm release whose `src/zonal.js` lists `'histogram'` in
+`STATS`, served by jsDelivr:
+
+```bash
+curl -s https://cdn.jsdelivr.net/gh/SchmidtDSE/geo-query-wasm@<tag>/src/zonal.js | grep -c "'histogram'"
+```
+
+| Hack | Why | Remove by |
+|---|---|---|
+| `plugins/geo-query-worker.js` imports a local copy of geo-query-wasm v0.6.0 (`plugins/geo-query-wasm/`: `src/`, `vendor/`, `LICENSE`) with `histogram` added, not a pinned release | The change isn't upstream yet; `plugins/geo-query-wasm/README.md` gives the source commit and the patch | Pointing the import back at `https://cdn.jsdelivr.net/gh/SchmidtDSE/geo-query-wasm@<tag>/src/worker.js` and deleting `plugins/geo-query-wasm/` |
+
+**Untested:** the patch's unit tests pass, but the copy hasn't been run in a browser yet. Re-test
+after removing the hack too: "area with RBR ≥ 0.5 inside the perimeter" should give 6 pixels at
+the pixel-centre rule.

@@ -14,7 +14,8 @@ fire-recovery-backend's `PORTOLAN_UPDATES_V2.md`.
   polygons don't. Parked until the vegetation catalog is reworked (see `HACKS.md`).
 - **Rung 1:** config is in. RBR and the CAL FIRE perimeter look right in the browser. dNBR, RdNBR
   and the chat checks haven't been run yet.
-- **Rung 2:** next. First step is the config-only `zonal_stats` test, on branch `jotr-zonal-stats`.
+- **Rung 2:** in progress on branch `jotr-zonal-stats`. The config-only `zonal_stats` test passed;
+  the `histogram` statistic is next.
 
 ## Starting state
 
@@ -118,6 +119,13 @@ No mirror is needed for this one.
   COGs (DEFLATE with the floating-point predictor).
   - Reference values (current data): 2,158 pixels inside the perimeter (213.3 acres) and mean
     RBR 0.234.
+  - **Result, 2026-11-14: passed.** With geo-query-wasm v0.6.0 unchanged (commit `8bc7adb`),
+    `zonal_stats` returned 2,158 pixels, mean 0.233733 and sum 504.395641 at the pixel-centre
+    rule, matching the reference. geotiff.js decodes the severity COGs (EPSG:32611). The model
+    called `get_stac_details` first and read the perimeter as
+    `s3://public-fire/calfire-2025/firep.parquet`.
+  - **Seen in passing:** the legend for RBR draws a grey-to-black ramp over 0–0.5 while the map
+    uses `rdylgn_r`. Possibly glen's legend ignoring a per-asset `colormap`; not yet checked.
 - **Vendor the worker (a deliberate workaround):**
   - Copy geo-query-wasm v0.6.0's `src/` (Apache-2.0; keep its LICENSE and note the source
     commit) into `plugins/geo-query-wasm/`.
