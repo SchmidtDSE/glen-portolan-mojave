@@ -5,22 +5,25 @@ built by a colleague, and the fire-recovery-backend burn-severity catalogs. Hack
 expected while the catalogs settle. Each one goes in `HACKS.md` with the change that
 retires it, and the work is done when that table is empty.
 
-Facts below were checked on 2026-11-13. The design behind the severity side is in
+Facts below were checked on 2026-11-13 and 2026-11-14. The design behind the severity side is in
 fire-recovery-backend's `PORTOLAN_UPDATES_V2.md`.
+
+## Status (2026-11-14)
+
+- **Rung 0:** config is in, served from a local mirror. The park boundary draws; the vegetation
+  polygons don't. Parked until the vegetation catalog is reworked (see `HACKS.md`).
+- **Rung 1:** config is in. RBR and the CAL FIRE perimeter look right in the browser. dNBR, RdNBR
+  and the chat checks haven't been run yet.
+- **Rung 2:** next. First step is the config-only `zonal_stats` test, on branch `jotr-zonal-stats`.
 
 ## Starting state
 
 - **This repo:** a copy of glen-portolan-template at `ced79b3`. GitHub Pages isn't enabled.
   This repo's AGENTS.md limits edits to `layers-input.json`, the `<title>`, the glen pin and
   the geo-query-wasm pin. No JavaScript of our own; the one exception is Rung 2.
-- **Branch `first-light-jotr-vegmap`** (uncommitted when handed over) already holds Rung 0:
-  - the glen pin bump;
-  - the new `layers-input.json`;
-  - the title;
-  - `HACKS.md`;
-  - the `dev-catalog/` ignore line.
-
-  Re-create the mirror with the command in `HACKS.md`.
+- **Branch `jotr-eureka-severity`** holds Rungs 0 and 1: the glen pin bump, `layers-input.json`,
+  the title, `HACKS.md`, the mirror setup and this plan. Rung 0 has no branch of its own; it
+  became config waiting on the vegetation host.
 - **Why glen v3.51.1:** v3.47.0 has no `items` support, and both catalogs keep their data in
   items. All six `glen@` URLs (five in `index.html`, one in `layers-input.json`) must name
   the same ref. jsDelivr serves v3.51.1, and the third-party libraries match the template's,
@@ -28,14 +31,21 @@ fire-recovery-backend's `PORTOLAN_UPDATES_V2.md`.
 
 ## Decisions
 
-- **2026-11-13: no mirror.** We wait for the vegetation host to send CORS headers instead of
-  serving `dev-catalog/`. The vegetation entry points at the live URL and loads once the host
-  is fixed. Rung 0's checks wait until then.
+- **2026-11-13: no mirror.** We would wait for the vegetation host to send CORS headers.
+  Replaced the next day.
+- **2026-11-14: a local mirror after all.** The vegetation entry points at a git-ignored copy in
+  `dev-catalog/`, made with `curl` because `portolan clone` needs a `versions.json` the host
+  doesn't publish. `pixi run serve` runs `RangeHTTPServer`, since PMTiles need byte ranges and
+  `http.server` ignores them. All three are hacks in `HACKS.md`, removed when the host is fixed.
+- **2026-11-14: vegetation polygons parked.** Against the mirror the boundary draws but the
+  vegetation polygons don't, and the browser never requests a vegetation tile. The catalog is
+  being reworked, so we re-test after that rather than chase it now.
 - **2026-11-13: Rung 1 config is in.** The severity, perimeter and vegetation entries all live
   in `layers-input.json`. The map opens on the burn scar (−116.33, 34.07, z13). Only RBR is
   switched on at start, so the three indices don't stack. dNBR and RdNBR are one click away.
-- **Dev tools:** the container has `pixi` (Python 3.12 and `pmtiles`) but no `git`, `curl` or
-  `unzip`. Those will come from pixi or the Dockerfile.
+- **Dev tools:** the dev container has `git`, `gh`, `curl` and `unzip`, and the pixi environment
+  has Python 3.12, `pmtiles`, `portolan-cli` and `rangehttpserver`. There is no browser, so
+  checks that need one are done by hand.
 
 ## Rung 0: first light on the vegetation catalog
 
@@ -50,8 +60,9 @@ Catalog: `https://jotr-nps-portolan.org/catalog.json`.
   - Ask the owner to add `Access-Control-Allow-Origin: *` and expose
     `Range, Content-Range, Accept-Ranges, ETag`.
   - Until then, serve a git-ignored mirror (`dev-catalog/`, about 63 MB) with the app from
-    `python3 -m http.server 8000`, so it's same-origin.
-- **Config:** one collection entry pointing at the mirror, with
+    `pixi run serve`, so it's same-origin. `HACKS.md` has the command that re-creates it.
+- **Config:** one collection entry pointing at the mirror
+  (`http://localhost:8000/dev-catalog/jotr-vegmap/collection.json`), with
   `items: ["park-boundary", "vegetation-map"]`.
   - Boundary: outline only (`default_style` fill-opacity 0 plus `outline_style`).
   - Vegetation: default paint. 67 map units is too many for a hand-written `match`.
@@ -86,8 +97,8 @@ No mirror is needed for this one.
   `https://s3-west.nrp-nautilus.io/public-fire/calfire-2025/firep/stac-collection.json`,
   which has a `rel: pmtiles` link and published styles.
   - Filter to Eureka 2025: unit JTP, alarm 2025-05-30, 214 acres.
-  - Check the field names in the PMTiles metadata first. The Parquet has `FIRE_NAME` and
-    `YEAR_`, but tiles can carry fewer fields.
+  - Checked 2026-11-14: the tiles carry `FIRE_NAME` (string) and `YEAR_` (number), so the
+    filter matches their types.
 - **Expect the layout to change:** the backend is moving to one item per index (`dnbr`,
   `rdnbr`, `rbr`). Keep the Eureka entry easy to edit.
 - **Done when:** the three indices draw with sensible colours over the perimeter, and the
@@ -98,9 +109,10 @@ No mirror is needed for this one.
 - **Turn it on:** in the MCP plugin's server entry, set:
   - `worker_config`: `"zonalStats": true`;
   - `include`: `["query", "zonal_stats"]`;
-  - `allowedDirectories`: the severity bucket's https prefix plus the defaults still needed
-    (NRP, `s3://`). A list replaces geo-query-wasm's defaults; check the exact format in its
-    README.
+  - `allowedDirectories`: v0.6.0's four defaults (`s3://`, `https://s3-west.nrp-nautilus.io/`,
+    the two source.coop https prefixes) plus
+    `https://storage.googleapis.com/dse-nps-fire-severity-storage/`. A list replaces the
+    defaults, and each entry is a directory, so it needs the trailing slash.
 - **First test:** "mean RBR inside the Eureka perimeter", with the zone from CAL FIRE's
   `firep.parquet`. This checks the open question of whether geotiff.js decodes the severity
   COGs (DEFLATE with the floating-point predictor).
@@ -123,7 +135,9 @@ No mirror is needed for this one.
 
 ## Rung 3: retire hacks as upstream and backend changes land
 
-- **Vegetation host fixes CORS:** point at the live URL and delete `dev-catalog/`.
+- **Vegetation host fixes CORS:** point at the live URL, delete `dev-catalog/` and put
+  `pixi run serve` back on `http.server` (the first group in `HACKS.md`). Then re-run Rung 0's
+  checks, starting with whether the vegetation polygons draw.
 - **Backend re-runs Eureka** (one item per index, collection title, `renders`, AGENTS.md):
   drop the per-asset `rescale`, `colormap` and `display_name`. The entry shrinks to the URL
   plus the item list.
