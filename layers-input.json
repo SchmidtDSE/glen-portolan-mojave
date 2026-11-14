@@ -111,10 +111,19 @@
                     {
                         "worker": "plugins/geo-query-worker.js",
                         "worker_config": {
-                            "discovery": false
+                            "discovery": false,
+                            "zonalStats": true,
+                            "allowedDirectories": [
+                                "s3://",
+                                "https://s3-west.nrp-nautilus.io/",
+                                "https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/",
+                                "https://data.source.coop/",
+                                "https://storage.googleapis.com/dse-nps-fire-severity-storage/"
+                            ]
                         },
                         "include": [
-                            "query"
+                            "query",
+                            "zonal_stats"
                         ]
                     }
                 ]
