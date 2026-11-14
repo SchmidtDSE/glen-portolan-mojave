@@ -65,7 +65,7 @@
             ]
         },
         {
-            "url": "https://jotr-nps-portolan.org/jotr-vegmap/collection.json",
+            "url": "http://localhost:8000/dev-catalog/jotr-vegmap/collection.json",
             "display_name": "JOTR vegetation map",
             "group": "Joshua Tree NP",
             "items": [
