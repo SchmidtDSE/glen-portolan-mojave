@@ -14,8 +14,8 @@ fire-recovery-backend's `PORTOLAN_UPDATES_V2.md`.
   polygons don't. Parked until the vegetation catalog is reworked (see `HACKS.md`).
 - **Rung 1:** config is in. RBR and the CAL FIRE perimeter look right in the browser. dNBR, RdNBR
   and the chat checks haven't been run yet.
-- **Rung 2:** in progress on branch `jotr-zonal-stats`. The config-only `zonal_stats` test passed;
-  the `histogram` statistic is vendored and unit-tested, but not yet run in a browser.
+- **Rung 2:** done on branch `jotr-zonal-stats`. The config-only `zonal_stats` test passed, and
+  the vendored `histogram` passed in a browser on 2026-11-15.
 - **Rung 4 (planned 2026-11-15):** the demo questions. The approximate route is H3 from the
   backend; the exact route is `zonal_stats` on the COG. Details are in `AGGREGATION.md`; the
   tiers are in `TIERS.md`.
@@ -173,6 +173,12 @@ No mirror is needed for this one.
   - Keep it a small diff so it can go upstream as a PR.
 - **Done when:** "area with RBR ≥ 0.5 inside the perimeter" returns 6 pixels at the
   pixel-centre rule (current data), and the area-weighted variant runs.
+- **Result, 2026-11-15: passed.** In a browser, the vendored `histogram` with `breaks: [0.5]`
+  gave 6 pixels (2,400 m², 0.24 ha) under both the centre rule and `pixel_rule: "area"`, out of
+  2,158 inside the perimeter.
+  - **Seen in passing:** the model called RBR ≥ 0.5 "high-severity burn". That's a class name
+    the analyst didn't give. The phase 1 prompt (1d) should forbid naming classes the user
+    didn't define.
 
 ## Rung 3: retire hacks as upstream and backend changes land
 
@@ -196,7 +202,7 @@ The main dependency is the backend's step 5 (the resubmitted fires).
 **Phase 0: finish Rung 2 (branch `jotr-zonal-stats`).**
 
 - Run the vendored `histogram` in a browser: "area with RBR ≥ 0.5 inside the perimeter" should
-  give 6 pixels at the centre rule.
+  give 6 pixels at the centre rule. **Done 2026-11-15** (see Rung 2).
 
 **Phase 1: work that doesn't wait on the backend (in parallel).**
 

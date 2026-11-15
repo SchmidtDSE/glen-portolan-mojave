@@ -104,6 +104,6 @@ curl -s https://cdn.jsdelivr.net/gh/SchmidtDSE/geo-query-wasm@<tag>/src/zonal.js
 |---|---|---|
 | `plugins/geo-query-worker.js` imports a local copy of geo-query-wasm v0.6.0 (`plugins/geo-query-wasm/`: `src/`, `vendor/`, `LICENSE`) with `histogram` added, not a pinned release | The change isn't upstream yet; `plugins/geo-query-wasm/README.md` gives the source commit and the patch | Pointing the import back at `https://cdn.jsdelivr.net/gh/SchmidtDSE/geo-query-wasm@<tag>/src/worker.js` and deleting `plugins/geo-query-wasm/` |
 
-**Untested:** the patch's unit tests pass, but the copy hasn't been run in a browser yet. Re-test
-after removing the hack too: "area with RBR ≥ 0.5 inside the perimeter" should give 6 pixels at
-the pixel-centre rule.
+**Tested (2026-11-15):** the patch's unit tests pass, and in a browser "area with RBR ≥ 0.5
+inside the perimeter" gave 6 pixels under both the centre rule and `pixel_rule: "area"`. Re-test
+after removing the hack: it should give the same.
