@@ -87,23 +87,33 @@ collection-level Parquet `data` assets for SQL.
 | Every layer listed under `items` (vegetation and Eureka severity) | Both catalogs keep their data in items. glen core draws item assets only when `items` names them (needs glen ≥ v3.51.1, hence the pin bump) | glen drawing item assets without config, or the catalogs publishing collection-level assets |
 | SQL sees no vegetation or severity tables (only the CAL FIRE `firep.parquet`) | The vegetation Parquet files are item assets, and severity is COG only | glen listing item Parquet assets for the vegetation tables; Rung 2's `zonal_stats` for the severity COGs |
 
-## Blocked on geo-query-wasm releasing `histogram`
+## Blocked on geo-query-wasm releasing the `zonal_stats` changes
 
-**Blocker:** `zonal_stats` in geo-query-wasm v0.6.0 has no `histogram` statistic, which the
-"area with RBR ≥ 0.5" questions need. The change is in `plugins/geo-query-wasm/histogram.patch`,
-ready to go upstream as a PR.
+**Blocker:** `zonal_stats` in geo-query-wasm v0.6.0 lacks three things the demo needs:
 
-**Check it has cleared:** a geo-query-wasm release whose `src/zonal.js` lists `'histogram'` in
-`STATS`, served by jsDelivr:
+- a `histogram` statistic, for "area with RBR ≥ t" questions;
+- a sum and mean per bin, for "mean RBR above t";
+- an exact pixel rule, for exactextract-level numbers.
+
+The changes are in `plugins/geo-query-wasm/zonal-stats.patch`, ready to go upstream as a PR.
+
+**Check it has cleared:** a geo-query-wasm release whose `src/zonal.js` has `'histogram'` in
+`STATS` and accepts `pixel_rule: "exact"`, served by jsDelivr:
 
 ```bash
-curl -s https://cdn.jsdelivr.net/gh/SchmidtDSE/geo-query-wasm@<tag>/src/zonal.js | grep -c "'histogram'"
+curl -s https://cdn.jsdelivr.net/gh/SchmidtDSE/geo-query-wasm@<tag>/src/zonal.js | grep -c "'histogram'\|'exact'"   # 2 or more
 ```
 
 | Hack | Why | Remove by |
 |---|---|---|
-| `plugins/geo-query-worker.js` imports a local copy of geo-query-wasm v0.6.0 (`plugins/geo-query-wasm/`: `src/`, `vendor/`, `LICENSE`) with `histogram` added, not a pinned release | The change isn't upstream yet; `plugins/geo-query-wasm/README.md` gives the source commit and the patch | Pointing the import back at `https://cdn.jsdelivr.net/gh/SchmidtDSE/geo-query-wasm@<tag>/src/worker.js` and deleting `plugins/geo-query-wasm/` |
+| `plugins/geo-query-worker.js` imports a local copy of geo-query-wasm v0.6.0 (`plugins/geo-query-wasm/`: `src/`, `vendor/`, `LICENSE`) with the `zonal_stats` changes, not a pinned release | The changes aren't upstream yet; `plugins/geo-query-wasm/README.md` gives the source commit and the patch | Pointing the import back at `https://cdn.jsdelivr.net/gh/SchmidtDSE/geo-query-wasm@<tag>/src/worker.js` and deleting `plugins/geo-query-wasm/` |
 
-**Tested (2026-11-15):** the patch's unit tests pass, and in a browser "area with RBR ≥ 0.5
-inside the perimeter" gave 6 pixels under both the centre rule and `pixel_rule: "area"`. Re-test
-after removing the hack: it should give the same.
+**Tested:**
+
+- **2026-11-15, `histogram`:** the unit tests pass, and in a browser "area with RBR ≥ 0.5 inside
+  the perimeter" gave 6 pixels under both the centre rule and `pixel_rule: "area"`.
+- **The per-bin sum and mean, and `pixel_rule: "exact"`:** the unit tests pass (40 in
+  `zonal.test.js`). Not yet run in a browser.
+
+Re-test after removing the hack: the same question should give the same answers under all three
+rules.

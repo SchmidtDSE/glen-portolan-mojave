@@ -1,0 +1,618 @@
+diff --git a/README.md b/README.md
+index 36a6846..e0fb2cc 100644
+--- a/README.md
++++ b/README.md
+@@ -120,8 +120,8 @@ Zonal questions normally go through a raster's H3 hex copy: the zones' cells joi
+ 
+ - **Reading:** [geotiff.js](https://github.com/geotiffjs/geotiff.js) 3.0.5, loaded from jsDelivr on the first call, reads the windows the zones cover by range request and decodes them, ZSTD included. DuckDB's `raster` extension can't do this in the browser: it has no wasm build, and its GDAL has no ZSTD codec.
+ - **Zones:** `zones_sql` is a SELECT that returns `id` and `geometry`. It runs on the locked engine, like `query`, and DuckDB reprojects the zones to the raster's CRS, which is read from the file or given as `raster_crs`.
+-- **Pixel rule:** a pixel counts when its centre is inside the zone, as rasterio counts by default. `pixel_rule: "area"` weights each pixel by the share of it inside the zone, estimated from an 8 × 8 grid of points.
+-- **Statistics:** `sum`, `mean`, `min`, `max` and `count` per zone, or `classes`, the pixel count of each value.
++- **Pixel rule:** a pixel counts when its centre is inside the zone, as rasterio and ArcGIS's zonal tools count. `pixel_rule: "area"` weights each pixel by the share of it inside the zone, estimated from an 8 × 8 grid of points. `pixel_rule: "exact"` weights it by the exact share, the area of the pixel's square inside the zone, as exactextract computes it; it is also the fastest of the weighted rules.
++- **Statistics:** `sum`, `mean`, `min`, `max` and `count` per zone; `classes`, the pixel count of each value; or `histogram`, the pixel count in each bin set by `breaks`. n increasing breaks make n + 1 bins (below the first, `[b[k-1], b[k])` between, and at or above the last), one row per zone and bin with `lower`, `upper`, `count`, and the `sum` and `mean` of the values in the bin, weighted by coverage under `pixel_rule: "area"` or `"exact"`.
+ - **Limits:**
+   - A call reads at most `zonalMaxPixels` pixels. When full resolution needs more, it reads the finest overview that fits, scales sums and counts to full-resolution pixels, and says the result is approximate.
+   - The COG must be in `allowedDirectories`.
+diff --git a/src/zonal.js b/src/zonal.js
+index e642176..4cd0de2 100644
+--- a/src/zonal.js
++++ b/src/zonal.js
+@@ -6,9 +6,11 @@
+  * has no ZSTD codec, so it cannot do this in the browser.
+  *
+  * Pixel rule: a pixel belongs to a zone when its centre falls inside the zone
+- * (holes and multipolygons by the even-odd rule), as rasterio and exactextract
+- * count by default. `pixel_rule: "area"` weights each pixel by the share of it
+- * the zone covers, estimated from an 8 × 8 grid of points in the pixel.
++ * (holes and multipolygons by the even-odd rule), as rasterio and ArcGIS's
++ * zonal tools count. `pixel_rule: "area"` weights each pixel by the share of
++ * it the zone covers, estimated from an 8 × 8 grid of points in the pixel.
++ * `pixel_rule: "exact"` weights it by the exact share, the area of the pixel's
++ * square inside the zone, as exactextract does.
+  *
+  * Everything here but zonalStats' reads is pure, so it is tested without a
+  * browser.
+@@ -26,7 +28,7 @@ export const MAX_ZONES = 10_000;
+ /** Points per side of the grid that estimates a pixel's covered share. */
+ export const AREA_SAMPLES = 8;
+ 
+-export const STATS = ['sum', 'mean', 'min', 'max', 'count', 'classes'];
++export const STATS = ['sum', 'mean', 'min', 'max', 'count', 'classes', 'histogram'];
+ 
+ /**
+  * The share of each pixel of a w × h window that the rings cover, by the
+@@ -67,6 +69,94 @@ export function coverage(rings, x0, y0, w, h, n = 1) {
+     return cov;
+ }
+ 
++/** The signed area of a ring, by the shoelace formula. */
++export function ringArea(ring) {
++    let a = 0;
++    for (let k = 0; k < ring.length; k++) {
++        const [x1, y1] = ring[k];
++        const [x2, y2] = ring[(k + 1) % ring.length];
++        a += x1 * y2 - x2 * y1;
++    }
++    return a / 2;
++}
++
++// The integral of clamp(u, 0, 1) from 0 to u.
++const rampIntegral = (u) => (u <= 0 ? 0 : u >= 1 ? u - 0.5 : (u * u) / 2);
++
++/**
++ * Adds one edge's crossing of one pixel row to that row's accumulation buffer.
++ * The crossing runs between x = xl and x = xh (window columns) over a height
++ * dy, and d is dy times the edge's direction. A pixel c gets d times the mean,
++ * over the crossing, of how much of [c, c + 1] lies right of the edge, and the
++ * buffer holds the differences between neighbouring pixels, so a running sum
++ * along the row gives each pixel's winding-weighted covered area.
++ */
++function addCrossing(acc, row, w, xl, xh, d) {
++    const first = Math.max(0, Math.floor(xl));
++    if (first >= w) return;
++    const end = Math.max(first, Math.min(w, Math.ceil(xh)));
++    let prev = 0;
++    for (let c = first; c < end; c++) {
++        const hi = c + 1 - xl;
++        const lo = c + 1 - xh;
++        const share = hi - lo > 1e-12
++            ? (rampIntegral(hi) - rampIntegral(lo)) / (hi - lo)
++            : Math.min(1, Math.max(0, (hi + lo) / 2));
++        acc[row + c] += d * share - prev;
++        prev = d * share;
++    }
++    if (end < w) acc[row + end] += d - prev;
++}
++
++/**
++ * The exact share of each pixel of a w × h window inside the polygons: the
++ * area of the pixel's square inside, as exactextract computes it. `polygons`
++ * is a list of polygons, each a list of rings in pixels of the whole image,
++ * outer ring first; the window starts at pixel (x0, y0). Rings may run either
++ * way round. Overlapping polygons are not merged; a pixel's share is capped
++ * at 1.
++ */
++export function exactCoverage(polygons, x0, y0, w, h) {
++    const acc = new Float64Array(h * (w + 1));
++    for (const rings of polygons) {
++        rings.forEach((ring, r) => {
++            const area = ringArea(ring);
++            if (area === 0) return;
++            // Outer rings one way round and holes the other, so the winding
++            // number is 1 inside the polygon and 0 in a hole.
++            const flip = (r === 0) === (area > 0) ? 1 : -1;
++            for (let k = 0; k < ring.length; k++) {
++                const a = ring[k];
++                const b = ring[(k + 1) % ring.length];
++                if (a[1] === b[1]) continue;
++                const dir = (b[1] > a[1] ? 1 : -1) * flip;
++                const [ax, ay, bx, by] = a[1] < b[1] ? [a[0], a[1], b[0], b[1]] : [b[0], b[1], a[0], a[1]];
++                const slope = (bx - ax) / (by - ay);
++                const rowEnd = Math.min(y0 + h, Math.ceil(by));
++                for (let j = Math.max(y0, Math.floor(ay)); j < rowEnd; j++) {
++                    const ys = Math.max(ay, j);
++                    const ye = Math.min(by, j + 1);
++                    if (ye <= ys) continue;
++                    const xs = ax + (ys - ay) * slope - x0;
++                    const xe = ax + (ye - ay) * slope - x0;
++                    addCrossing(acc, (j - y0) * (w + 1), w, Math.min(xs, xe), Math.max(xs, xe), (ye - ys) * dir);
++                }
++            }
++        });
++    }
++    const cov = new Float64Array(w * h);
++    for (let j = 0; j < h; j++) {
++        let run = 0;
++        for (let i = 0; i < w; i++) {
++            run += acc[j * (w + 1) + i];
++            const c = Math.min(1, Math.abs(run));
++            // Rounding leaves pixels outside every ring with a share of about 1e-16.
++            cov[j * w + i] = c < 1e-9 ? 0 : c;
++        }
++    }
++    return cov;
++}
++
+ /** The outer and inner rings of a GeoJSON Polygon or MultiPolygon, or null. */
+ export function polygonRings(geometry) {
+     if (geometry?.type === 'Polygon') return geometry.coordinates;
+@@ -74,6 +164,13 @@ export function polygonRings(geometry) {
+     return null;
+ }
+ 
++/** The polygons of a GeoJSON Polygon or MultiPolygon, each a list of rings, outer ring first; or null. */
++export function polygonParts(geometry) {
++    if (geometry?.type === 'Polygon') return [geometry.coordinates];
++    if (geometry?.type === 'MultiPolygon') return geometry.coordinates;
++    return null;
++}
++
+ /**
+  * Where a raster level sits: geographic origin, pixel size and dimensions.
+  * Map coordinates (x, y) fall on pixel ((x - ox) / rx, (y - oy) / ry).
+@@ -100,10 +197,49 @@ export function windowOf(rings, width, height) {
+     return x1 > x0 && y1 > y0 ? [x0, y0, x1, y1] : null;
+ }
+ 
+-/** Accumulates one zone's statistics over a window's values and coverage. */
+-export function summarize(values, cov, nodata, classes) {
++/** The most breaks one histogram may have. */
++export const MAX_BREAKS = 1000;
++
++/**
++ * The bin a value falls in for increasing breaks b: bin 0 is below b[0], bin k
++ * is b[k-1] <= v < b[k], and the last bin is at or above the last break.
++ */
++export function binOf(v, breaks) {
++    let lo = 0; let hi = breaks.length;
++    while (lo < hi) {
++        const mid = (lo + hi) >> 1;
++        if (breaks[mid] <= v) lo = mid + 1; else hi = mid;
++    }
++    return lo;
++}
++
++/** Each bin's bounds for increasing breaks, with null for an open end. */
++export function binBounds(breaks) {
++    return Array.from({ length: breaks.length + 1 }, (_, k) => ({
++        lower: k === 0 ? null : breaks[k - 1],
++        upper: k === breaks.length ? null : breaks[k],
++    }));
++}
++
++/** Why breaks are unusable, or null when they are finite, strictly increasing and few enough. */
++export function checkBreaks(breaks) {
++    if (!Array.isArray(breaks) || !breaks.length) return '"histogram" needs breaks, a list of increasing numbers';
++    if (breaks.length > MAX_BREAKS) return `breaks may have at most ${MAX_BREAKS} values`;
++    if (breaks.some(b => typeof b !== 'number' || !Number.isFinite(b))) return 'breaks must be finite numbers';
++    if (breaks.some((b, k) => k > 0 && b <= breaks[k - 1])) return 'breaks must be strictly increasing';
++    return null;
++}
++
++/**
++ * Accumulates one zone's statistics over a window's values and coverage.
++ * With `breaks`, `bins` holds the covered count in each histogram bin and
++ * `binSums` the covered sum of the values in it.
++ */
++export function summarize(values, cov, nodata, classes, breaks = null) {
+     let sum = 0; let count = 0; let min = Infinity; let max = -Infinity;
+     const counts = classes ? new Map() : null;
++    const bins = breaks ? new Float64Array(breaks.length + 1) : null;
++    const binSums = breaks ? new Float64Array(breaks.length + 1) : null;
+     for (let i = 0; i < cov.length; i++) {
+         const c = cov[i];
+         if (c <= 0) continue;
+@@ -114,8 +250,13 @@ export function summarize(values, cov, nodata, classes) {
+         if (v < min) min = v;
+         if (v > max) max = v;
+         if (counts) counts.set(v, (counts.get(v) ?? 0) + c);
++        if (bins) {
++            const k = binOf(v, breaks);
++            bins[k] += c;
++            binSums[k] += v * c;
++        }
+     }
+-    return { sum, count, min: count ? min : null, max: count ? max : null, counts };
++    return { sum, count, min: count ? min : null, max: count ? max : null, counts, bins, binSums };
+ }
+ 
+ /**
+@@ -194,11 +335,17 @@ export function zonesSql(sql, zonesCrs, crs) {
+  * @param {Object} opts
+  *   band       1-based band (default 1)
+  *   stats      names from STATS (default sum, mean, count)
+- *   pixelRule  'centre' (default) or 'area'
++ *   pixelRule  'centre' (default), 'area' or 'exact'
+  *   maxPixels  cap on pixels read, summed over the zones' windows
++ *   breaks     increasing numbers, for the 'histogram' stat
+  * @returns {{ rows, level, scale, pixels, notes }}
+  */
+-export async function zonalStats(tiff, zones, { band = 1, stats = ['sum', 'mean', 'count'], pixelRule = 'centre', maxPixels = MAX_PIXELS } = {}) {
++export async function zonalStats(tiff, zones, { band = 1, stats = ['sum', 'mean', 'count'], pixelRule = 'centre', maxPixels = MAX_PIXELS, breaks = null } = {}) {
++    const histogram = stats.includes('histogram');
++    if (histogram) {
++        const bad = checkBreaks(breaks);
++        if (bad) throw new Error(bad);
++    }
+     const base = await tiff.getImage(0);
+     const bands = base.getSamplesPerPixel();
+     if (!Number.isInteger(band) || band < 1 || band > bands) throw new Error(`band must be 1 to ${bands}`);
+@@ -218,7 +365,7 @@ export async function zonalStats(tiff, zones, { band = 1, stats = ['sum', 'mean'
+     }
+     levels.sort((a, b) => b.width - a.width);
+ 
+-    const shapes = zones.map(z => ({ id: z.id, rings: polygonRings(z.geometry) }));
++    const shapes = zones.map(z => ({ id: z.id, rings: polygonRings(z.geometry), parts: polygonParts(z.geometry) }));
+     const windows = (lv) => shapes.map(s => (s.rings ? windowOf(toPixels(s.rings, lv), lv.width, lv.height) : null));
+     const chosen = chooseLevel(levels, windows, maxPixels);
+     if (!chosen) {
+@@ -235,14 +382,34 @@ export async function zonalStats(tiff, zones, { band = 1, stats = ['sum', 'mean'
+ 
+     const rows = [];
+     for (let i = 0; i < shapes.length; i++) {
+-        const { id, rings } = shapes[i];
++        const { id, rings, parts } = shapes[i];
+         const win = chosen.windows[i];
+-        let s = { sum: 0, count: 0, min: null, max: null, counts: classes ? new Map() : null };
++        let s = {
++            sum: 0, count: 0, min: null, max: null,
++            counts: classes ? new Map() : null,
++            bins: histogram ? new Float64Array(breaks.length + 1) : null,
++            binSums: histogram ? new Float64Array(breaks.length + 1) : null,
++        };
+         if (win) {
+             const [x0, y0, x1, y1] = win;
+             const [values] = await level.image.readRasters({ window: win, samples: [band - 1] });
+-            const cov = coverage(toPixels(rings, level), x0, y0, x1 - x0, y1 - y0, n);
+-            s = summarize(values, cov, nodata, classes);
++            const cov = pixelRule === 'exact'
++                ? exactCoverage(parts.map(p => toPixels(p, level)), x0, y0, x1 - x0, y1 - y0)
++                : coverage(toPixels(rings, level), x0, y0, x1 - x0, y1 - y0, n);
++            s = summarize(values, cov, nodata, classes, histogram ? breaks : null);
++        }
++        if (histogram) {
++            const bounds = binBounds(breaks);
++            for (let k = 0; k < bounds.length; k++) {
++                rows.push({
++                    id,
++                    ...bounds[k],
++                    count: rings ? round(s.bins[k] * scale) : null,
++                    sum: rings ? round(s.binSums[k] * scale) : null,
++                    mean: s.bins[k] > 0 ? round(s.binSums[k] / s.bins[k]) : null,
++                });
++            }
++            continue;
+         }
+         if (classes) {
+             const entries = [...s.counts].sort((a, b) => a[0] - b[0]);
+@@ -274,8 +441,9 @@ export async function zonalStats(tiff, zones, { band = 1, stats = ['sum', 'mean'
+ const round = (v) => (Number.isFinite(v) ? Math.round(v * 1e6) / 1e6 : v);
+ 
+ export const ZONAL_STATS = [
+-    'Summarize a raster (a Cloud-Optimized GeoTIFF) over polygon zones: sum, mean, min, max and pixel count per zone, or',
+-    'the pixel count of each value for a categorical raster ("classes").',
++    'Summarize a raster (a Cloud-Optimized GeoTIFF) over polygon zones: sum, mean, min, max and pixel count per zone,',
++    'the pixel count of each value for a categorical raster ("classes"), or the pixel count in each bin of a continuous',
++    'raster ("histogram", with `breaks`).',
+     '',
+     'Use this ONLY for a raster that has no H3 hex copy. When get_stac_details lists an H3 hex parquet for the dataset,',
+     'join your zones to the hex in SQL with the `query` tool instead: it is faster and covers any area. This tool declines',
+@@ -286,8 +454,15 @@ export const ZONAL_STATS = [
+     '  `SELECT name AS id, geometry FROM read_parquet(\'s3://.../wards.parquet\')`.',
+     '- `zones_crs`: the zones\' coordinate system, default EPSG:4326 (longitude, latitude). They are reprojected to the raster\'s.',
+     '- `raster_crs`: only when the COG\'s own coordinate system is not an EPSG code; otherwise it is read from the file.',
+-    '- `pixel_rule`: "centre" (default) counts a pixel when its centre is inside the zone, as rasterio does; "area" weights',
+-    '  each pixel by the share of it inside the zone.',
++    '- `pixel_rule`: "centre" (default) counts a pixel when its centre is inside the zone, as rasterio and ArcGIS\'s zonal',
++    '  tools do; "area" weights each pixel by the share of it inside the zone, estimated from 64 points; "exact" weights it',
++    '  by the exact share, the area of the pixel inside the zone, as exactextract does. Use "exact" when the user wants',
++    '  exact or GIS-comparable numbers.',
++    '- `breaks`: for `stats: ["histogram"]`, increasing cut points. n breaks make n + 1 bins: below the first, between',
++    '  each pair (lower bound included), and at or above the last. One row per zone and bin gives `lower`, `upper` (null',
++    '  for an open end), `count` (pixels), `sum` (of the values) and `mean` (of the values in the bin). For "pixels with',
++    '  value >= 0.5" pass `breaks: [0.5]` and read the last bin; its `mean` is the mean of those pixels. Multiply a count',
++    '  by the pixel area for an area.',
+     '',
+     'One call reads at most a fixed number of pixels. Larger zones are read from a coarser overview, and the result says so;',
+     'sums and counts are then scaled to full-resolution pixels and approximate.',
+@@ -300,7 +475,8 @@ export const ZONAL_SCHEMA = {
+         zones_sql: { type: 'string' },
+         stats: { type: 'array', items: { type: 'string', enum: STATS }, default: ['sum', 'mean', 'count'] },
+         band: { type: 'integer', default: 1 },
+-        pixel_rule: { type: 'string', enum: ['centre', 'area'], default: 'centre' },
++        pixel_rule: { type: 'string', enum: ['centre', 'area', 'exact'], default: 'centre' },
++        breaks: { type: 'array', items: { type: 'number' } },
+         zones_crs: { type: 'string', default: 'EPSG:4326' },
+         raster_crs: { type: 'string' },
+         format: { type: 'string', enum: ['markdown', 'json'], default: 'markdown' },
+@@ -335,8 +511,13 @@ export function createZonalStats({ open, query, allowed, catalog, maxPixels = MA
+             return `Error: stats must be a list of ${STATS.join(', ')}`;
+         }
+         if (stats.includes('classes') && stats.length > 1) return 'Error: "classes" cannot be combined with other stats';
++        if (stats.includes('histogram') && stats.length > 1) return 'Error: "histogram" cannot be combined with other stats';
++        if (stats.includes('histogram')) {
++            const bad = checkBreaks(args.breaks);
++            if (bad) return `Error: ${bad}`;
++        }
+         const pixelRule = args.pixel_rule ?? 'centre';
+-        if (pixelRule !== 'centre' && pixelRule !== 'area') return 'Error: pixel_rule must be "centre" or "area"';
++        if (!['centre', 'area', 'exact'].includes(pixelRule)) return 'Error: pixel_rule must be "centre", "area" or "exact"';
+         const fmt = args.format ?? 'markdown';
+         if (fmt !== 'markdown' && fmt !== 'json') return `Error: unknown format ${fmt}`;
+         if (typeof args.zones_sql !== 'string' || !args.zones_sql.trim()) return 'Error: no zones_sql given';
+@@ -372,12 +553,16 @@ export function createZonalStats({ open, query, allowed, catalog, maxPixels = MA
+ 
+         let out;
+         try {
+-            out = await zonalStats(tiff, zones, { band: args.band ?? 1, stats, pixelRule, maxPixels });
++            out = await zonalStats(tiff, zones, { band: args.band ?? 1, stats, pixelRule, maxPixels, breaks: args.breaks ?? null });
+         } catch (err) {
+             return `Error: ${err.message}`;
+         }
+         if (fmt === 'json') return JSON.stringify(out.rows);
+-        const rule = pixelRule === 'area' ? 'pixels weighted by the share inside each zone' : 'pixels whose centre is inside each zone';
++        const rule = {
++            centre: 'pixels whose centre is inside each zone',
++            area: 'pixels weighted by the share inside each zone, estimated from 64 points',
++            exact: 'pixels weighted by the exact share inside each zone, as exactextract',
++        }[pixelRule];
+         return [format(out.rows), '', `Pixel rule: ${rule}. Raster CRS: ${crs}.`, ...out.notes].join('\n');
+     };
+ }
+diff --git a/test/zonal.test.js b/test/zonal.test.js
+index 169de57..fe98179 100644
+--- a/test/zonal.test.js
++++ b/test/zonal.test.js
+@@ -1,7 +1,8 @@
+ import { describe, it, expect } from 'vitest';
+ import {
+     coverage, windowOf, summarize, chooseLevel, rasterCrs, sameCrs, cogUrl, zonesSql,
+-    zonalStats, createZonalStats, MAX_ZONES,
++    zonalStats, createZonalStats, MAX_ZONES, binOf, binBounds, checkBreaks, MAX_BREAKS,
++    exactCoverage, ringArea, polygonParts,
+ } from '../src/zonal.js';
+ import { ALLOWED_DIRECTORIES } from '../src/defaults.js';
+ import { markdownTable } from '../src/format.js';
+@@ -42,6 +43,91 @@ describe('the pixel rule', () => {
+     });
+ });
+ 
++describe('the exact pixel rule', () => {
++    const reverse = (ring) => [...ring].reverse();
++    // A seeded generator, so the random polygons are the same on every run.
++    const rng = (seed) => () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
++    // A star-shaped polygon around (cx, cy): concave, with edges at every angle.
++    const star = (rand, cx, cy, r, n) => {
++        const ring = Array.from({ length: n }, (_, k) => {
++            const t = (2 * Math.PI * k) / n;
++            const rr = r * (0.3 + 0.7 * rand());
++            return [cx + rr * Math.cos(t), cy + rr * Math.sin(t)];
++        });
++        return [...ring, ring[0]];
++    };
++
++    it('gives a pixel the area of its square inside the zone', () => {
++        expect(exactCoverage([[square(0, 0, 0.5, 1)]], 0, 0, 1, 1)[0]).toBeCloseTo(0.5, 12);
++        expect(exactCoverage([[[[0, 0], [1, 0], [0, 1], [0, 0]]]], 0, 0, 1, 1)[0]).toBeCloseTo(0.5, 12);
++        expect(exactCoverage([[square(0.2, 0.3, 0.7, 0.4)]], 0, 0, 1, 1)[0]).toBeCloseTo(0.05, 12);
++        // A pixel the zone only touches gets nothing, unlike under the area rule's samples.
++        expect([...exactCoverage([[square(0, 0, 1, 1)]], 0, 0, 2, 1)]).toEqual([1, 0]);
++    });
++
++    it('splits a diagonal edge between the pixels it crosses', () => {
++        // The diamond with corners at the middles of a 2 × 2 block's sides covers half of each pixel.
++        const diamond = [[1, 0], [2, 1], [1, 2], [0, 1], [1, 0]];
++        expect([...exactCoverage([[diamond]], 0, 0, 2, 2)].map(c => Math.round(c * 1e12) / 1e12)).toEqual([0.5, 0.5, 0.5, 0.5]);
++    });
++
++    it('sums to the polygon\'s area, whichever way its rings run', () => {
++        const rand = rng(7);
++        for (let k = 0; k < 20; k++) {
++            const ring = star(rand, 10 + 5 * rand(), 10 + 5 * rand(), 3 + 4 * rand(), 5 + Math.floor(20 * rand()));
++            const area = Math.abs(ringArea(ring));
++            expect(sum([...exactCoverage([[ring]], 0, 0, 30, 30)])).toBeCloseTo(area, 9);
++            expect(sum([...exactCoverage([[reverse(ring)]], 0, 0, 30, 30)])).toBeCloseTo(area, 9);
++        }
++    });
++
++    it('matches dense point sampling pixel by pixel', () => {
++        const rand = rng(11);
++        const ring = star(rand, 4, 4, 3.5, 40);
++        const exact = exactCoverage([[ring]], 0, 0, 8, 8);
++        const sampled = coverage([ring], 0, 0, 8, 8, 400);
++        for (let i = 0; i < 64; i++) expect(Math.abs(exact[i] - sampled[i])).toBeLessThan(0.01);
++    });
++
++    it('cuts holes and joins multipolygon parts, whichever way the rings run', () => {
++        const hole = square(1.25, 1.25, 1.75, 1.75);
++        for (const outer of [square(0, 0, 3, 3), reverse(square(0, 0, 3, 3))]) {
++            for (const inner of [hole, reverse(hole)]) {
++                const cov = exactCoverage([[outer, inner]], 0, 0, 3, 3);
++                expect(cov[4]).toBeCloseTo(0.75, 12);
++                expect(sum([...cov])).toBeCloseTo(8.75, 12);
++            }
++        }
++        const two = exactCoverage(polygonParts({
++            type: 'MultiPolygon', coordinates: [[square(0, 0, 0.5, 1)], [reverse(square(2.5, 2, 3, 3))]],
++        }), 0, 0, 3, 3);
++        expect(two[0]).toBeCloseTo(0.5, 12);
++        expect(two[8]).toBeCloseTo(0.5, 12);
++        expect(sum([...two])).toBeCloseTo(1, 12);
++    });
++
++    it('caps a pixel at 1 where multipolygon parts overlap', () => {
++        const cov = exactCoverage([[square(0, 0, 1, 1)], [square(0, 0, 1, 1)]], 0, 0, 1, 1);
++        expect(cov[0]).toBe(1);
++    });
++
++    it('gives a window the same shares as the whole image, for zones that run past its edges', () => {
++        const rand = rng(3);
++        const ring = star(rand, 6, 6, 5.5, 30);
++        const whole = exactCoverage([[ring]], 0, 0, 12, 12);
++        const part = exactCoverage([[ring]], 3, 4, 5, 6);
++        for (let j = 0; j < 6; j++) {
++            for (let i = 0; i < 5; i++) expect(part[j * 5 + i]).toBeCloseTo(whole[(j + 4) * 12 + (i + 3)], 12);
++        }
++    });
++
++    it('lists a geometry\'s polygons with their rings', () => {
++        expect(polygonParts({ type: 'Polygon', coordinates: [[1], [2]] })).toEqual([[[1], [2]]]);
++        expect(polygonParts({ type: 'MultiPolygon', coordinates: [[[1]], [[2]]] })).toEqual([[[1]], [[2]]]);
++        expect(polygonParts({ type: 'Point', coordinates: [0, 0] })).toBeNull();
++    });
++});
++
+ describe('windows and statistics', () => {
+     it('gives the pixel window a zone touches, clipped to the image', () => {
+         expect(windowOf([square(1.2, 1.5, 3.1, 2.9)], 10, 10)).toEqual([1, 1, 4, 3]);
+@@ -56,6 +142,30 @@ describe('windows and statistics', () => {
+         expect(summarize([1], new Float32Array([0]), null, false)).toMatchObject({ count: 0, min: null, max: null });
+     });
+ 
++    it('puts a value in its histogram bin, lower bound included', () => {
++        const breaks = [0, 0.5, 1];
++        expect([-1, 0, 0.25, 0.5, 0.99, 1, 7].map(v => binOf(v, breaks))).toEqual([0, 1, 1, 2, 2, 3, 3]);
++        expect(binBounds([0.5])).toEqual([{ lower: null, upper: 0.5 }, { lower: 0.5, upper: null }]);
++    });
++
++    it('accumulates histogram bins by coverage, skipping nodata and NaN', () => {
++        const s = summarize([0.1, 0.6, 0.7, -9, NaN, 0.9], new Float32Array([1, 0.5, 1, 1, 1, 0]), -9, false, [0.5]);
++        expect([...s.bins]).toEqual([1, 1.5]);
++        expect(summarize([1], new Float32Array([1]), null, false).bins).toBeNull();
++    });
++
++    it('accepts only finite, strictly increasing breaks', () => {
++        expect(checkBreaks([0.5])).toBeNull();
++        expect(checkBreaks([-0.1, 0, 0.27, 0.66])).toBeNull();
++        expect(checkBreaks(undefined)).toMatch(/needs breaks/);
++        expect(checkBreaks([])).toMatch(/needs breaks/);
++        expect(checkBreaks([1, 1])).toMatch(/strictly increasing/);
++        expect(checkBreaks([2, 1])).toMatch(/strictly increasing/);
++        expect(checkBreaks([0, '1'])).toMatch(/finite numbers/);
++        expect(checkBreaks([0, Infinity])).toMatch(/finite numbers/);
++        expect(checkBreaks(Array.from({ length: MAX_BREAKS + 1 }, (_, k) => k))).toMatch(/at most/);
++    });
++
+     it('chooses the finest level that fits the cap', () => {
+         const levels = [{ n: 100 }, { n: 25 }, { n: 4 }];
+         const windows = lv => [[0, 0, lv.n, 1]];
+@@ -151,6 +261,89 @@ describe('zonalStats', () => {
+         expect(out.notes[0]).toMatch(/1 zone\(s\) are not polygons/);
+     });
+ 
++    it('counts pixels in histogram bins, including empty bins and zones that are not polygons', async () => {
++        // Pixel values are 10 * row + column, rows 0 to 3.
++        const out = await zonalStats(fakeTiff(), [
++            zone('all', 100, 50, 104, 46),
++            { id: 'line', geometry: { type: 'LineString', coordinates: [[100, 50], [101, 49]] } },
++        ], { stats: ['histogram'], breaks: [10, 30, 100] });
++        expect(out.rows).toEqual([
++            { id: 'all', lower: null, upper: 10, count: 4, sum: 6, mean: 1.5 },
++            { id: 'all', lower: 10, upper: 30, count: 8, sum: 132, mean: 16.5 },
++            { id: 'all', lower: 30, upper: 100, count: 4, sum: 126, mean: 31.5 },
++            { id: 'all', lower: 100, upper: null, count: 0, sum: 0, mean: null },
++            { id: 'line', lower: null, upper: 10, count: null, sum: null, mean: null },
++            { id: 'line', lower: 10, upper: 30, count: null, sum: null, mean: null },
++            { id: 'line', lower: 30, upper: 100, count: null, sum: null, mean: null },
++            { id: 'line', lower: 100, upper: null, count: null, sum: null, mean: null },
++        ]);
++    });
++
++    it('weights histogram bins by covered share under the area rule', async () => {
++        // Pixel (0, 0), value 0, is covered whole; pixel (1, 0), value 1, half, with its centre on the edge.
++        const z = [zone('half', 100, 50, 101.5, 49)];
++        const centre = await zonalStats(fakeTiff(), z, { stats: ['histogram'], breaks: [1] });
++        expect(centre.rows.map(r => r.count)).toEqual([1, 0]);
++        const area = await zonalStats(fakeTiff(), z, { stats: ['histogram'], breaks: [1], pixelRule: 'area' });
++        expect(area.rows.map(r => r.count)).toEqual([1, 0.5]);
++    });
++
++    it('weights histogram bins by the exact covered share under the exact rule', async () => {
++        // A triangle over pixels (0, 0) and (1, 0), values 0 and 1, with its long edge from map (101.7, 50) to
++        // (100, 49). Of its 0.85 pixels, 0.245 / 1.7 lie in pixel (1, 0) and the rest in pixel (0, 0). Sampling
++        // 64 points gives 0.71875 and 0.140625; the exact rule gives the areas.
++        const tri = { id: 'tri', geometry: { type: 'Polygon', coordinates: [[[100, 50], [101.7, 50], [100, 49], [100, 50]]] } };
++        const exact = await zonalStats(fakeTiff(), [tri], { stats: ['histogram'], breaks: [1], pixelRule: 'exact' });
++        expect(exact.rows).toEqual([
++            { id: 'tri', lower: null, upper: 1, count: 0.705882, sum: 0, mean: 0 },
++            { id: 'tri', lower: 1, upper: null, count: 0.144118, sum: 0.144118, mean: 1 },
++        ]);
++        const area = await zonalStats(fakeTiff(), [tri], { stats: ['histogram'], breaks: [1], pixelRule: 'area' });
++        expect(area.rows.map(r => r.count)).toEqual([0.71875, 0.140625]);
++    });
++
++    it('gives the mean of the values in each bin, weighted by coverage', async () => {
++        // Pixels (2, 0) and (3, 0), values 2 and 3, covered whole and half.
++        const out = await zonalStats(fakeTiff(), [zone('z', 102, 50, 103.5, 49)],
++            { stats: ['histogram'], breaks: [2], pixelRule: 'exact' });
++        expect(out.rows[1]).toEqual({ id: 'z', lower: 2, upper: null, count: 1.5, sum: 3.5, mean: 2.333333 });
++    });
++
++    it('agrees with the whole-pixel rules where a zone follows pixel edges', async () => {
++        const z = [zone('top-left', 100, 50, 102, 48)];
++        const centre = await zonalStats(fakeTiff(), z, { stats: ['sum', 'mean', 'count'] });
++        const exact = await zonalStats(fakeTiff(), z, { stats: ['sum', 'mean', 'count'], pixelRule: 'exact' });
++        expect(exact.rows).toEqual(centre.rows);
++    });
++
++    it('cuts holes and joins multipolygon parts under the exact rule', async () => {
++        // The whole raster less a 1 × 1 hole over pixel (1, 1), value 11; plus nothing else.
++        const donut = {
++            id: 'donut',
++            geometry: { type: 'Polygon', coordinates: [square(100, 50, 104, 46), square(101, 49, 102, 48)] },
++        };
++        const two = {
++            id: 'two',
++            geometry: { type: 'MultiPolygon', coordinates: [[square(100, 50, 100.5, 49)], [square(103, 47, 104, 46.5)]] },
++        };
++        const out = await zonalStats(fakeTiff(), [donut, two], { stats: ['sum', 'count'], pixelRule: 'exact' });
++        expect(out.rows[0]).toEqual({ id: 'donut', sum: 264 - 11, count: 15 });
++        // Half of pixel (0, 0), value 0, and half of pixel (3, 3), value 33.
++        expect(out.rows[1]).toEqual({ id: 'two', sum: 16.5, count: 1 });
++    });
++
++    it('scales histogram counts read from an overview', async () => {
++        // Overview values are 5.5, 7.5, 25.5 and 27.5, each standing for 4 pixels.
++        const out = await zonalStats(fakeTiff(), [zone('all', 100, 50, 104, 46)], { stats: ['histogram'], breaks: [10, 30], maxPixels: 4 });
++        expect(out.level).toBe(1);
++        expect(out.rows.map(r => r.count)).toEqual([8, 8, 0]);
++    });
++
++    it('refuses a histogram without usable breaks', async () => {
++        await expect(zonalStats(fakeTiff(), [zone('all', 100, 50, 104, 46)], { stats: ['histogram'] }))
++            .rejects.toThrow(/needs breaks/);
++    });
++
+     it('gives a zone outside the raster empty statistics', async () => {
+         const out = await zonalStats(fakeTiff(), [zone('far', 0, 0, 1, 1)], { stats: ['sum', 'mean', 'count'] });
+         expect(out.rows[0]).toEqual({ id: 'far', sum: 0, mean: null, count: 0 });
+@@ -201,9 +394,29 @@ describe('the zonal_stats tool', () => {
+         expect(await run({ ...args, stats: ['median'] })).toMatch(/^Error: stats must be a list of/);
+         expect(await run({ ...args, zones_sql: ' ' })).toBe('Error: no zones_sql given');
+         expect(await run({ ...args, pixel_rule: 'touch' })).toMatch(/^Error: pixel_rule/);
++        expect(await run({ ...args, stats: ['histogram', 'sum'], breaks: [1] })).toBe('Error: "histogram" cannot be combined with other stats');
++        expect(await run({ ...args, stats: ['histogram'] })).toMatch(/^Error: "histogram" needs breaks/);
++        expect(await run({ ...args, stats: ['histogram'], breaks: [1, 0] })).toBe('Error: breaks must be strictly increasing');
+         expect(calls).toHaveLength(0);
+     });
+ 
++    it('renders a histogram as one row per bin', async () => {
++        const { run } = tool();
++        const out = await run({ ...args, stats: ['histogram'], breaks: [10] });
++        expect(out).toContain('| id | lower | upper | count |');
++        expect(JSON.parse(await run({ ...args, stats: ['histogram'], breaks: [10], format: 'json' }))).toEqual([
++            { id: 'top-left', lower: null, upper: 10, count: 2, sum: 1, mean: 0.5 },
++            { id: 'top-left', lower: 10, upper: null, count: 2, sum: 21, mean: 10.5 },
++        ]);
++    });
++
++    it('takes the exact pixel rule and says so', async () => {
++        const out = await tool().run({ ...args, pixel_rule: 'exact' });
++        expect(out).toContain('| top-left | 22 | 5.5 | 4 |');
++        expect(out).toContain('Pixel rule: pixels weighted by the exact share inside each zone, as exactextract.');
++        expect(await tool().run({ ...args, pixel_rule: 'touch' })).toBe('Error: pixel_rule must be "centre", "area" or "exact"');
++    });
++
+     it('explains a zones query that fails', async () => {
+         const out = await tool({ query: async () => { throw new Error('Binder Error: column "id" not found'); } }).run(args);
+         expect(out).toMatch(/^SQL Error: Binder Error.*\n\nzones_sql must be one SELECT returning columns `id` and `geometry`\.$/s);

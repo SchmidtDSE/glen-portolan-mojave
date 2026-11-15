@@ -208,7 +208,7 @@ The main dependency is the backend's step 5 (the resubmitted fires).
 
 | # | Work | Branch |
 |---|---|---|
-| 1a | Per-bin sum and an exact `pixel_rule` in the vendored geo-query-wasm, with tests and the upstream patch | `jotr-exact-zonal` |
+| 1a | Per-bin sum and an exact `pixel_rule` in the vendored geo-query-wasm, with tests and the upstream patch. **Done 2026-11-15** (unit tests); browser check below | `jotr-exact-zonal` |
 | 1b | Config: `charts.js`, `hex.js`, `register_hex_tiles` and `get_hex_tile_status`. Check against the current Eureka COG | `jotr-demo-config` |
 | 1c | Browser checks (below). Their results decide whether the recipes need changing | `jotr-demo-config` |
 | 1d | System prompt via `system_prompt_url`: framing, breaks, method labels, and the route default once decided | `jotr-demo-config` |
@@ -279,13 +279,22 @@ In order, each a PR to their `dev`:
 
 ### Exact route (this repo)
 
-- Add to the vendored geo-query-wasm `zonal_stats`:
-  - an exact `pixel_rule`: clip each edge pixel's square to the zone, and weight the pixel by
-    the overlap area;
-  - a coverage-weighted sum per `histogram` bin, so mean above t is sum ÷ count in one call
-    (the EDA's mean is over the RBR > 0 area only).
+- **Done 2026-11-15 (branch `jotr-exact-zonal`).** Added to the vendored geo-query-wasm
+  `zonal_stats`:
+  - `pixel_rule: "exact"`, which weights each pixel by the area of its square inside the zone,
+    as exactextract does;
+  - `sum` and `mean` per `histogram` bin, so the last bin's `mean` is the mean above t (the EDA's
+    mean is over the RBR > 0 area only).
 
-  Add tests, extend the upstream patch as with `histogram.patch`, and update the `HACKS.md` row.
+  About the implementation and tests:
+  - It's one pass over each zone's edges, faster than the 64-point area rule.
+  - 40 tests in `zonal.test.js`. They check exact shares, the sum against the polygon's
+    area, agreement with dense sampling, holes, multipolygons, ring direction and windows.
+  - The upstream suite passes (114 tests, Node 20).
+  - `histogram.patch` became `zonal-stats.patch`, and `HACKS.md` is updated.
+- **Browser check** for the new features. Under each of the three rules, ask "area with
+  RBR ≥ 0.5 inside the Eureka perimeter, and the mean RBR of those pixels". Expect 6 pixels at
+  the centre rule, and a `mean` column in the histogram rows.
 - Run benchmark row 4 in a browser for Eureka and Black Rock:
   - hectares and mean RBR by `MapUnit_Name`, within RBR > 0 (`breaks: [1e-9]`);
   - under the centre, area and exact rules.
