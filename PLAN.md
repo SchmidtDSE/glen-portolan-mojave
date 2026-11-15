@@ -8,14 +8,17 @@ retires it, and the work is done when that table is empty.
 Facts below were checked on 2026-11-13 and 2026-11-14. The design behind the severity side is in
 fire-recovery-backend's `PORTOLAN_UPDATES_V2.md`.
 
-## Status (2026-11-14)
+## Status (2026-11-15)
 
 - **Rung 0:** config is in, served from a local mirror. The park boundary draws; the vegetation
   polygons don't. Parked until the vegetation catalog is reworked (see `HACKS.md`).
 - **Rung 1:** config is in. RBR and the CAL FIRE perimeter look right in the browser. dNBR, RdNBR
   and the chat checks haven't been run yet.
 - **Rung 2:** in progress on branch `jotr-zonal-stats`. The config-only `zonal_stats` test passed;
-  the `histogram` statistic is next.
+  the `histogram` statistic is vendored and unit-tested, but not yet run in a browser.
+- **Rung 4 (planned 2026-11-15):** the demo questions. The approximate route is H3 from the
+  backend; the exact route is `zonal_stats` on the COG. Details are in `AGGREGATION.md`; the
+  tiers are in `TIERS.md`.
 
 ## Starting state
 
@@ -44,6 +47,36 @@ fire-recovery-backend's `PORTOLAN_UPDATES_V2.md`.
 - **2026-11-13: Rung 1 config is in.** The severity, perimeter and vegetation entries all live
   in `layers-input.json`. The map opens on the burn scar (−116.33, 34.07, z13). Only RBR is
   switched on at start, so the three indices don't stack. dNBR and RdNBR are one click away.
+- **2026-11-15: two routes for the demo, agreed with the backend.**
+  - The demo questions:
+    - where the fire was most severe;
+    - hectares and mean RBR by vegetation class above the analyst's thresholds;
+    - Joshua tree climate futures from the USGS SDM.
+  - The analyst chooses the breaks. Nothing stores classes.
+  - **The COG is the source of truth** for exact numbers and maps. No pixel table and no pixel
+    PMTiles: they would turn the raster into vectors.
+  - **Exact route:** `zonal_stats` on the COG. Zones come from exact vector SQL (vegetation ×
+    SDM × perimeter). It is near exact under `pixel_rule: "area"`, and exact after we add an
+    exact pixel rule.
+  - **Approximate route:**
+    - the backend's opt-in hex tables (`options.h3_resolutions: [12, 13]`, in a `{fire_id}-hex`
+      collection);
+    - drawn with glen's `hex.js` from tiles geo-query-wasm builds in the browser;
+    - the only browser path for raster × raster.
+  - **Route default, the user's decision:** approximate by default with exact on request, or
+    exact for every reported number (the backend's view).
+  - **Close enough means within about 1 ha per fire.**
+  - **BAER is the baseline, never the comparison.** The app is BAER's dNBR plus the analyses
+    BAER doesn't offer. It is never "faster BAER", and no number is set beside a BAER product's.
+  - **The contract** (request options, hex schema, backend steps, joint benchmark) is the
+    backend's "Aggregation workplan", final for this round.
+  - Charts come from glen core's `plugins/charts.js`. glen-charts doesn't fit: it's a separate
+    dashboard library on H3 at resolutions 8–10.
+  - **Wanted upstream in glen:** drawing a geometry a tool returns, and a stepped raster colour
+    map. How charts take exact numbers and how hex tools are worded are general glen
+    questions; hack them for the demo if needed.
+  - **Deferred:** the Nautilus exactextract MCP tool. CORS on the vegetation host will be fixed
+    and isn't planned here.
 - **Dev tools:** the dev container has `git`, `gh`, `curl` and `unzip`, and the pixi environment
   has Python 3.12, `pmtiles`, `portolan-cli` and `rangehttpserver`. There is no browser, so
   checks that need one are done by hand.
@@ -151,10 +184,185 @@ No mirror is needed for this one.
   plus the item list.
 - **Then:** enable Pages from `main`.
 
+## Rung 4: aggregation for the demo questions
+
+The full requirements are in `AGGREGATION.md`, and the routes are in `TIERS.md`.
+
+### Sequence
+
+The demo needs nothing new from glen: hex tiles, charts and `zonal_stats` all work at v3.51.1.
+The main dependency is the backend's step 5 (the resubmitted fires).
+
+**Phase 0: finish Rung 2 (branch `jotr-zonal-stats`).**
+
+- Run the vendored `histogram` in a browser: "area with RBR ≥ 0.5 inside the perimeter" should
+  give 6 pixels at the centre rule.
+
+**Phase 1: work that doesn't wait on the backend (in parallel).**
+
+| # | Work | Branch |
+|---|---|---|
+| 1a | Per-bin sum and an exact `pixel_rule` in the vendored geo-query-wasm, with tests and the upstream patch | `jotr-exact-zonal` |
+| 1b | Config: `charts.js`, `hex.js`, `register_hex_tiles` and `get_hex_tile_status`. Check against the current Eureka COG | `jotr-demo-config` |
+| 1c | Browser checks (below). Their results decide whether the recipes need changing | `jotr-demo-config` |
+| 1d | System prompt via `system_prompt_url`: framing, breaks, method labels, and the route default once decided | `jotr-demo-config` |
+| 1e | Early run of benchmark row 4 on the published v2 Eureka COG, with the EDA's `JOTR_VegPolys`. Proves the recipe; rerun in phase 2 | none |
+| 1f | SDM: the user downloads it; convert it and write a Portolan collection. Needs a host | `jotr-sdm` |
+| 1g | Fix AGENTS.md's out-of-date line on hex tiles | `jotr-demo-config` |
+
+**Upstream, in parallel, written up for the user to file** (in priority order):
+
+1. geo-query-wasm PR: `histogram`, the per-bin sum and the exact rule.
+2. glen: draw a geometry a tool or query returns.
+3. glen: a stepped colour map or `expression` in `set_raster_colormap`.
+4. glen: list item-level Parquet for SQL.
+5. glen: one discussion issue on charts from non-`query` tools, hex tool wording, and exact or
+   approximate route language.
+
+**Demo workarounds if glen is slow:**
+
+- Hex wording and route language go in the prompt.
+- Exact numbers reach charts as `data` from `zonal_stats`.
+- Anything needing our own JavaScript is asked of the user first. This repo's rules allow only
+  the vendored worker.
+
+**Phase 2: when the backend delivers step 5.**
+
+- Swap in the resubmitted Eureka and add Black Rock, with their perimeter and hex collections.
+- Retire the CAL FIRE perimeter hack, and the per-asset `rescale` and `colormap` if the new
+  catalogs carry `renders`.
+- Run benchmark row 4 for real, and confirm r12 and r13 from row 5.
+- Run the coarse-level experiment.
+- Tell the backend whether to drop the `h3` string column and whether to pre-compute any coarse
+  level.
+- Write welcome examples with real class names and analyst-stated thresholds.
+
+**Phase 3: as glen releases land.**
+
+- Move the glen pin (all six URLs; check jsDelivr returns 200).
+- Turn on the new tools, and remove the demo workarounds they replace.
+- When the geo-query-wasm release is out: point the worker back at it, delete
+  `plugins/geo-query-wasm/`, and close that `HACKS.md` group.
+
+**Phase 4: demo-ready.**
+
+- "Done when" (below) passes for both fires.
+- `HACKS.md` lists only known leftovers.
+- Pages is enabled from `main` (Rung 3).
+
+**Decisions waiting on the user:**
+
+- the route default (blocks the route part of 1d);
+- where the SDM collection is hosted (blocks 1f);
+- PR #46: close or rework (the backend's work);
+- whether our own JavaScript is allowed as a temporary workaround.
+
+### Backend (theirs; for reference)
+
+In order, each a PR to their `dev`:
+
+1. Merge `v2-perimeter-catalog` (`geometry_kind: "perimeter"`, `{fire_id}-perimeter`).
+2. PR #46: they recommend closing it and starting fresh. The user decides.
+3. `options.h3_resolutions` and the `{fire_id}-hex` collection.
+   - Columns: `h{n}`, `h10`, `h8` (UBIGINT); `h0`; a string `h3`; `rbr`, `dnbr` and `rdnbr`.
+   - Each cell is a cell-centre sample. Rows are sorted by cell, with collection-level assets.
+4. The benchmark script: exactextract on `refined_rbr.tif` and on the v2 COG, and every H3
+   level from r13 to r8.
+5. Deploy, then resubmit Eureka and Black Rock as perimeter requests with
+   `h3_resolutions: [12, 13]`, and hand us the catalog URLs.
+
+### Exact route (this repo)
+
+- Add to the vendored geo-query-wasm `zonal_stats`:
+  - an exact `pixel_rule`: clip each edge pixel's square to the zone, and weight the pixel by
+    the overlap area;
+  - a coverage-weighted sum per `histogram` bin, so mean above t is sum ÷ count in one call
+    (the EDA's mean is over the RBR > 0 area only).
+
+  Add tests, extend the upstream patch as with `histogram.patch`, and update the `HACKS.md` row.
+- Run benchmark row 4 in a browser for Eureka and Black Rock:
+  - hectares and mean RBR by `MapUnit_Name`, within RBR > 0 (`breaks: [1e-9]`);
+  - under the centre, area and exact rules.
+  - **Zones:** the vegetation **not** clipped to the CAL FIRE perimeter. The EDA's area is
+    vegetation ∩ the RBR > 0 pixels, and some fall outside the perimeter (Black Rock: 32.07 ha
+    against CAL FIRE's 26.9 ha).
+  - Check which vegetation source matches the EDA's `JOTR_VegPolys`.
+
+### Approximate route (this repo)
+
+- Add glen core's `plugins/hex.js` (option `geo_query_wasm: "v0.6.0"`).
+- Add `register_hex_tiles` and `get_hex_tile_status` to the MCP entry's `include`.
+- Add the `{fire_id}-hex` collections once they are published.
+- Confirm r12 and r13 from benchmark row 5 in a browser.
+- Coarse-level experiment, in SQL over `hex-r13.parquet` alone: a parent mean, a per-cell
+  histogram, and the centre child (`h3_cell_to_center_child`). Ask the backend to pre-compute
+  a level only if it's worth the storage.
+- If the recipes never use the string `h3` column, tell the backend it can drop it.
+
+### App config and prompt
+
+- Add glen core's `plugins/charts.js` after the MCP entry.
+- Add the SDM host to `allowedDirectories` (and the vegetation host, once its CORS is fixed).
+- Route language in the tool descriptions and system prompt:
+  - the route default, once the user decides it;
+  - never choose breaks;
+  - name the method and resolution in every answer.
+- Framing in the welcome text, examples and prompt:
+  - BAER's dNBR plus arbitrary zones, the analyst's thresholds, RBR and RdNBR, and recovery over
+    time;
+  - never "faster BAER", and no comparison with a BAER product.
+- Demo hacks, if needed, each logged in `HACKS.md`:
+  - feed exact `zonal_stats` rows to `render_chart`;
+  - override `register_hex_tiles`' "only for density" wording.
+- Fix AGENTS.md's out-of-date line that glen can't draw geo-query-wasm's hex tiles (`hex.js`
+  exists at v3.51.1).
+
+### Upstream, written up for the user (not patched here)
+
+- glen: a tool to draw a geometry that a tool or query returns.
+- glen: an interval colour map or `expression` in `set_raster_colormap`, for the exact
+  single-raster "where".
+- glen: list item-level Parquet for SQL.
+- glen: general questions on charts from non-`query` tools, hex tool wording, and exact or
+  approximate route language.
+- geo-query-wasm: `histogram`, then the exact `pixel_rule`.
+
+### Joshua tree SDM
+
+- ScienceBase item `67a2c062d34e91a4ffc72e88` refuses automated fetches, so download the files
+  by hand.
+- Convert them to GeoParquet (EPSG:4326) and PMTiles, and publish them as a Portolan collection
+  with collection-level assets.
+- Record the attributes and scenarios for the prompts.
+
+### Check in a browser
+
+- The `h3` extension loads.
+- `h3_polygon_wkt_to_cells`, `h3_cell_area` and `h3_cell_to_center_child` exist, with the names
+  and types the recipes assume (UBIGINT cells).
+- `ST_Union_Agg` is available.
+- Whether `render_chart` stacks or groups bars by `series`.
+
+### Done when
+
+On the resubmitted Eureka and Black Rock, with a threshold the user chooses:
+
+- "where is RBR ≥ t in Joshua tree woodland" draws hex cells;
+- "exact hectares and mean RBR by vegetation class" is charted, and matches the benchmark:
+  - the exact rule is within floating point of the backend's exactextract;
+  - `pixel_rule: "area"` and r13 are within 1–2 % per class;
+- the same question by the approximate route gives a labelled hex estimate;
+- "what does the SDM predict for the burned Joshua tree woodland" answers per scenario.
+
 ## Later (don't start yet)
 
-- h10 hex tables and an MTBS join recipe.
-- The fire's own perimeter catalog, once the backend's `geometry_kind` request field exists.
+- An `exact_zonal` MCP tool on Nautilus (Python exactextract) for arbitrary zones and large
+  areas.
+- Exact clipped footprints (threshold, polygonize, intersect), once glen can draw a returned
+  geometry.
+- An MTBS join recipe.
+- The fire's own perimeter: a `{fire_id}-perimeter` collection in its analysis catalog (backend
+  branch `v2-perimeter-catalog`). Replaces the CAL FIRE filter.
 - A couple of nearby fires in one app.
 - A backend script that writes `layers-input.json` from a finished job.
 
@@ -163,6 +371,6 @@ No mirror is needed for this one.
 - Branch per rung. Don't push or open PRs without asking.
 - Never commit API keys (`config.json` is git-ignored).
 - Upstream problems (glen, geo-query-wasm, a catalog host, the backend) get written up for the
-  user, not patched here. The one exception is the vendored worker in Rung 2.
+  user, not patched here. The one exception is the vendored geo-query-wasm (Rungs 2 and 4).
 - Before pinning a new glen or geo-query-wasm ref, check that jsDelivr returns `HTTP/2 200`
   for it.
