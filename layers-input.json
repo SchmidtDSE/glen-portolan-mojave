@@ -5,39 +5,81 @@
     },
     "default_basemap": "natgeo",
     "view": {
-        "center": [-116.33, 34.07],
-        "zoom": 13
+        "center": [-116.36, 34.064],
+        "zoom": 12.6
     },
     "collections": [
         {
-            "url": "https://storage.googleapis.com/dse-nps-fire-severity-storage/v2/fires/eureka-badc3220/eureka-badc3220/collection.json",
-            "display_name": "Eureka fire burn severity",
+            "url": "https://storage.googleapis.com/dse-nps-fire-severity-storage/v2/fires/2025-eureka-0928336c/2025-eureka-0928336c/collection.json",
+            "display_name": "Eureka burn severity",
             "group": "Eureka fire (2025)",
             "items": [
                 {
                     "id": "rbr",
                     "assets": [
-                        { "id": "rbr", "display_name": "Burn severity: RBR", "visible": true }
+                        { "id": "rbr", "display_name": "Eureka: RBR", "visible": true }
                     ]
                 },
                 {
                     "id": "dnbr",
                     "assets": [
-                        { "id": "dnbr", "display_name": "Burn severity: dNBR" }
+                        { "id": "dnbr", "display_name": "Eureka: dNBR" }
                     ]
                 },
                 {
                     "id": "rdnbr",
                     "assets": [
-                        { "id": "rdnbr", "display_name": "Burn severity: RdNBR" }
+                        { "id": "rdnbr", "display_name": "Eureka: RdNBR" }
                     ]
                 }
             ]
         },
         {
-            "url": "https://storage.googleapis.com/dse-nps-fire-severity-storage/v2/fires/eureka-badc3220/eureka-badc3220-perimeter/collection.json",
+            "url": "https://storage.googleapis.com/dse-nps-fire-severity-storage/v2/fires/2025-eureka-0928336c/2025-eureka-0928336c-perimeter/collection.json",
             "display_name": "Eureka fire perimeter",
             "group": "Eureka fire (2025)",
+            "visible": true,
+            "default_style": {
+                "fill-color": "#000000",
+                "fill-opacity": 0
+            },
+            "outline_style": {
+                "line-color": "#212121",
+                "line-width": 2
+            },
+            "tooltip": [
+                "fire_event_name"
+            ]
+        },
+        {
+            "url": "https://storage.googleapis.com/dse-nps-fire-severity-storage/v2/fires/2025-blackrock-5fc03749/2025-blackrock-5fc03749/collection.json",
+            "display_name": "Black Rock burn severity",
+            "group": "Black Rock fire (2025)",
+            "items": [
+                {
+                    "id": "rbr",
+                    "assets": [
+                        { "id": "rbr", "display_name": "Black Rock: RBR", "visible": true }
+                    ]
+                },
+                {
+                    "id": "dnbr",
+                    "assets": [
+                        { "id": "dnbr", "display_name": "Black Rock: dNBR" }
+                    ]
+                },
+                {
+                    "id": "rdnbr",
+                    "assets": [
+                        { "id": "rdnbr", "display_name": "Black Rock: RdNBR" }
+                    ]
+                }
+            ]
+        },
+        {
+            "url": "https://storage.googleapis.com/dse-nps-fire-severity-storage/v2/fires/2025-blackrock-5fc03749/2025-blackrock-5fc03749-perimeter/collection.json",
+            "display_name": "Black Rock fire perimeter",
+            "group": "Black Rock fire (2025)",
             "visible": true,
             "default_style": {
                 "fill-color": "#000000",
@@ -96,7 +138,7 @@
     ],
     "sidebar": {
         "enabled": true,
-        "title": "Joshua Tree NP: Eureka fire",
+        "title": "Joshua Tree NP: 2025 fires",
         "chat_title": "Chat"
     },
     "plugins": [
@@ -161,11 +203,11 @@
         ]
     },
     "welcome": {
-        "message": "I can map and measure the Eureka fire (2025) burn severity in Joshua Tree against the park's vegetation map. You choose the thresholds. Try asking:",
+        "message": "I can map and measure burn severity for the Eureka and Black Rock fires (2025) in Joshua Tree against the park's vegetation map. You choose the thresholds. Try asking:",
         "examples": [
-            "Hectares with RBR ≥ 0.5 inside the Eureka perimeter, and their mean RBR",
-            "Chart hectares burned per vegetation class inside the perimeter, split at RBR 0.1 and 0.27",
-            "Mean RBR in Joshua Tree - California Juniper / Nevada Ephedra Woodland inside the perimeter"
+            "Exact hectares with RBR ≥ 0.5 inside each fire's perimeter, and their mean RBR",
+            "Chart exact hectares per vegetation class inside the Black Rock perimeter, split at RBR 0.1 and 0.27",
+            "Map where RBR ≥ 0.27 in Joshua tree woodland in both fires, as r13 hex tiles"
         ]
     }
 }
