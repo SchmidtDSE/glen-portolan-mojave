@@ -3,4 +3,3 @@ config.json
 .ipynb_checkpoints/
 .vscode/
 .pixi/
-dev-catalog/

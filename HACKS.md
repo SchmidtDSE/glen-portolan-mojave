@@ -5,53 +5,6 @@ Each entry is a temporary workaround and the change that retires it. Done when e
 The hacks are grouped by what they wait on. When a blocker clears, run its check, remove every
 hack in its group together, then do the re-test listed for that group.
 
-## Blocked on the vegetation host (`jotr-nps-portolan.org`)
-
-**Blocker:** the host sends no `Access-Control-Allow-Origin` and publishes no `versions.json`
-(checked 2026-11-13 and 2026-11-14). The data itself is fine.
-
-**Check it has cleared:**
-
-```bash
-curl -sI -H 'Origin: http://example.org' https://jotr-nps-portolan.org/jotr-vegmap/collection.json | grep -i access-control
-curl -s -o /dev/null -w '%{http_code}\n' https://jotr-nps-portolan.org/jotr-vegmap/versions.json   # 200
-```
-
-| Hack | Why | Remove by |
-|---|---|---|
-| The vegetation entry in `layers-input.json` points at a local mirror, `http://localhost:8000/dev-catalog/jotr-vegmap/collection.json`, so it loads only from `pixi run serve` at the repository root. `dev-catalog/` is git-ignored (63 MB); re-create it with the command below | Without CORS, browsers can't read the host from another origin. The URL must be absolute: glen reads a bare path as a collection id | Pointing the entry back at `https://jotr-nps-portolan.org/jotr-vegmap/collection.json` and deleting `dev-catalog/` |
-| The mirror is made with `curl` and a hand-written file list, not `portolan clone` (`portolan-cli` is in the pixi environment) | `portolan clone` reads each collection's `versions.json`; the host returns 404 for it, for the root `versions.json` and for `.portolan/config.yaml`. The items' assets also sit outside the collection, under `../../assets/` | Deleting the mirror once CORS works. If a mirror is still wanted, `pixi run portolan clone <catalog URL> dev-catalog` once `versions.json` exists |
-| `pixi run serve` runs `RangeHTTPServer` (PyPI `rangehttpserver`), not `python -m http.server` | The PMTiles in `dev-catalog/` are read by byte range, and `http.server` ignores `Range` (it returns the whole 30 MB file with a 200) | Deleting the mirror. Then set the `serve` task in `.devcontainer/pixi.toml` back to `python -m http.server 8000` and run `pixi remove --pypi rangehttpserver` |
-
-**Untested:** Rung 0's checks haven't passed yet: both vegetation layers appearing and drawing, no
-`[Portolan]` warnings, and the chat filtering on `MapUnit_Name`. Run them again against the live URL
-once the host is fixed.
-
-**Known issue, not chased (2026-11-14):** against the mirror, the park boundary draws but the
-vegetation polygons don't, even when ticked and zoomed in. The server log shows the browser reading
-`vegetation-map.pmtiles` only twice (header and metadata) and never requesting a tile. The file
-itself looks sound: zoom 8–14, one `vegetation-map` layer with 16,499 polygons, the same extent as
-the boundary, which draws. The catalog is being reworked, so re-test after that before digging in.
-
-### Re-creating the vegetation mirror
-
-From the repository root:
-
-```bash
-B=https://jotr-nps-portolan.org
-for f in catalog.json AGENTS.md README.md \
-         jotr-vegmap/collection.json jotr-vegmap/AGENTS.md jotr-vegmap/README.md \
-         jotr-vegmap/park-boundary/park-boundary.json \
-         jotr-vegmap/vegetation-map/vegetation-map.json \
-         assets/park-boundary.parquet assets/park-boundary.pmtiles \
-         assets/vegetation-map.parquet assets/vegetation-map.pmtiles; do
-  curl -sfS --create-dirs -o "dev-catalog/$f" "$B/$f" || echo "failed: $f"
-done
-```
-
-The list covers every file that the catalog, collection and items link to. If the catalog gains an
-item or asset, add it here.
-
 ## Blocked on fire-recovery-backend re-running Eureka
 
 **Blocker:** the Eureka collection has no `renders` and no collection title, and it puts all three

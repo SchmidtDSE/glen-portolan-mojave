@@ -41,6 +41,9 @@ fire-recovery-backend's `PORTOLAN_UPDATES_V2.md`.
   `dev-catalog/`, made with `curl` because `portolan clone` needs a `versions.json` the host
   doesn't publish. `pixi run serve` runs `RangeHTTPServer`, since PMTiles need byte ranges and
   `http.server` ignores them. All three are hacks in `HACKS.md`, removed when the host is fixed.
+- **2026-11-16: mirror removed.** The host now sends CORS headers, including for byte ranges.
+  The entry points at the live URL, `dev-catalog/` is gone and `pixi run serve` is back on
+  `http.server`.
 - **2026-11-14: vegetation polygons parked.** Against the mirror the boundary draws but the
   vegetation polygons don't, and the browser never requests a vegetation tile. The catalog is
   being reworked, so we re-test after that rather than chase it now.
@@ -78,7 +81,7 @@ fire-recovery-backend's `PORTOLAN_UPDATES_V2.md`.
   - **Deferred:** the Nautilus exactextract MCP tool. CORS on the vegetation host will be fixed
     and isn't planned here.
 - **Dev tools:** the dev container has `git`, `gh`, `curl` and `unzip`, and the pixi environment
-  has Python 3.12, `pmtiles`, `portolan-cli` and `rangehttpserver`. There is no browser, so
+  has Python 3.12, `pmtiles` and `portolan-cli`. There is no browser, so
   checks that need one are done by hand.
 
 ## Rung 0: first light on the vegetation catalog
@@ -94,7 +97,8 @@ Catalog: `https://jotr-nps-portolan.org/catalog.json`.
   - Ask the owner to add `Access-Control-Allow-Origin: *` and expose
     `Range, Content-Range, Accept-Ranges, ETag`.
   - Until then, serve a git-ignored mirror (`dev-catalog/`, about 63 MB) with the app from
-    `pixi run serve`, so it's same-origin. `HACKS.md` has the command that re-creates it.
+    `pixi run serve`, so it's same-origin. **Fixed 2026-11-16:** the host sends
+    `Access-Control-Allow-Origin: *` and allows `Range`; the mirror is gone.
 - **Config:** one collection entry pointing at the mirror
   (`http://localhost:8000/dev-catalog/jotr-vegmap/collection.json`), with
   `items: ["park-boundary", "vegetation-map"]`.
@@ -182,9 +186,9 @@ No mirror is needed for this one.
 
 ## Rung 3: retire hacks as upstream and backend changes land
 
-- **Vegetation host fixes CORS:** point at the live URL, delete `dev-catalog/` and put
-  `pixi run serve` back on `http.server` (the first group in `HACKS.md`). Then re-run Rung 0's
-  checks, starting with whether the vegetation polygons draw.
+- **Vegetation host fixes CORS. Done 2026-11-16:** the entry points at the live URL,
+  `dev-catalog/` is deleted and `pixi run serve` is back on `http.server`. Still to do: re-run
+  Rung 0's checks, starting with whether the vegetation polygons draw.
 - **Backend re-runs Eureka** (one item per index, collection title, `renders`, AGENTS.md):
   drop the per-asset `rescale`, `colormap` and `display_name`. The entry shrinks to the URL
   plus the item list.

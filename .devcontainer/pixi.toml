@@ -9,10 +9,8 @@ pmtiles = ">=3.8"
 
 # Tasks run from the repository root, where the app's files are.
 [tasks]
-# RangeHTTPServer, not http.server: the local dev-catalog/ PMTiles need byte ranges (see HACKS.md).
-serve = { cmd = "python -m RangeHTTPServer 8000", cwd = ".." }
+serve = { cmd = "python -m http.server 8000", cwd = ".." }
 inspect = { cmd = "python inspect_collection.py", cwd = ".." }
 
 [pypi-dependencies]
 portolan-cli = ">=0.9.0, <0.10"
-rangehttpserver = ">=1.4.0, <2"
