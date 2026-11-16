@@ -12,17 +12,18 @@ collection-level Parquet `data` assets for SQL.
 
 | Hack | Why | Remove by |
 |---|---|---|
-| Every layer listed under `items` (vegetation and Eureka severity) | Both catalogs keep their data in items. glen core draws item assets only when `items` names them (needs glen ≥ v3.51.1, hence the pin bump) | glen drawing item assets without config, or the catalogs publishing collection-level assets |
+| Every layer listed under `items` (vegetation and both fires' severity) | Both catalogs keep their data in items. glen core draws item assets only when `items` names them (needs glen ≥ v3.51.1, hence the pin bump) | glen drawing item assets without config, or the catalogs publishing collection-level assets |
 | `system-prompt.md` lists the data paths (severity COGs, perimeter, hex tables, vegetation, boundary), with their CRS | glen lists only collection-level Parquet for SQL, so the model can't find the vegetation Parquet, and it spends steps looking up the rest | glen listing item Parquet assets. The fire's paths stay in the prompt until glen's catalog listing gives the model what it needs in one step |
 | `system-prompt.md` replaces glen's base prompt (copied from v3.51.1's `core/system-prompt.md` and changed) | The base prompt says the map "cannot run queries or compute new numbers", which contradicts the SQL tools, and has no place for the demo's rules | glen's base prompt allowing an app section to be appended, or knowing when SQL tools are present. Until then, compare this file with glen's base prompt whenever the pin moves |
 
 ## Blocked on geo-query-wasm releasing the `zonal_stats` changes
 
-**Blocker:** `zonal_stats` in geo-query-wasm v0.6.0 lacks three things the demo needs:
+**Blocker:** `zonal_stats` in geo-query-wasm v0.6.0 lacks four things the demo needs:
 
 - a `histogram` statistic, for "area with RBR ≥ t" questions;
 - a sum and mean per bin, for "mean RBR above t";
-- an exact pixel rule, for exactextract-level numbers.
+- an exact pixel rule, for exactextract-level numbers;
+- hectares beside each count, so the model never converts pixel counts itself.
 
 The changes are in `plugins/geo-query-wasm/zonal-stats.patch`, ready to go upstream as a PR.
 
@@ -41,6 +42,8 @@ curl -s https://cdn.jsdelivr.net/gh/SchmidtDSE/geo-query-wasm@<tag>/src/zonal.js
 
 - **2026-11-15, `histogram`:** the unit tests pass, and in a browser "area with RBR ≥ 0.5 inside
   the perimeter" gave 6 pixels under both the centre rule and `pixel_rule: "area"`.
+- **2026-11-16, `hectares`:** unit-tested (44 in `zonal.test.js`, 118 upstream). In a browser the model
+  reported areas from the column (Eureka, RBR ≥ 0.5: 0.24 ha) and made no hand conversions.
 - **2026-11-16, the per-bin sum and mean, and `pixel_rule: "exact"`:** the unit tests pass (40
   in `zonal.test.js`). In a browser, the same question under the exact rule gave 6.0 pixels with
   mean RBR 0.526, and the total coverage (86.47 ha) matched the perimeter's area to within 0.06 %.
