@@ -10,44 +10,35 @@
     },
     "collections": [
         {
-            "url": "https://storage.googleapis.com/dse-nps-fire-severity-storage/v2/fires/eureka-9c3382ee/eureka-9c3382ee/collection.json",
+            "url": "https://storage.googleapis.com/dse-nps-fire-severity-storage/v2/fires/eureka-badc3220/eureka-badc3220/collection.json",
             "display_name": "Eureka fire burn severity",
             "group": "Eureka fire (2025)",
-            "colormap": "rdylgn_r",
             "items": [
                 {
-                    "id": "severity",
+                    "id": "rbr",
                     "assets": [
-                        {
-                            "id": "rbr",
-                            "display_name": "Burn severity: RBR",
-                            "visible": true,
-                            "rescale": "0,0.5"
-                        },
-                        {
-                            "id": "dnbr",
-                            "display_name": "Burn severity: dNBR",
-                            "rescale": "-0.1,0.66"
-                        },
-                        {
-                            "id": "rdnbr",
-                            "display_name": "Burn severity: RdNBR",
-                            "rescale": "0,0.8"
-                        }
+                        { "id": "rbr", "display_name": "Burn severity: RBR", "visible": true }
+                    ]
+                },
+                {
+                    "id": "dnbr",
+                    "assets": [
+                        { "id": "dnbr", "display_name": "Burn severity: dNBR" }
+                    ]
+                },
+                {
+                    "id": "rdnbr",
+                    "assets": [
+                        { "id": "rdnbr", "display_name": "Burn severity: RdNBR" }
                     ]
                 }
             ]
         },
         {
-            "url": "https://s3-west.nrp-nautilus.io/public-fire/calfire-2025/firep/stac-collection.json",
-            "id": "eureka-perimeter",
-            "display_name": "Eureka fire perimeter (CAL FIRE)",
+            "url": "https://storage.googleapis.com/dse-nps-fire-severity-storage/v2/fires/eureka-badc3220/eureka-badc3220-perimeter/collection.json",
+            "display_name": "Eureka fire perimeter",
             "group": "Eureka fire (2025)",
             "visible": true,
-            "default_filter": ["all",
-                ["==", ["get", "FIRE_NAME"], "EUREKA"],
-                ["==", ["get", "YEAR_"], 2025]
-            ],
             "default_style": {
                 "fill-color": "#000000",
                 "fill-opacity": 0
@@ -57,11 +48,7 @@
                 "line-width": 2
             },
             "tooltip": [
-                "FIRE_NAME",
-                "YEAR_",
-                "ALARM_DATE",
-                "GIS_ACRES",
-                "UNIT_ID"
+                "fire_event_name"
             ]
         },
         {
