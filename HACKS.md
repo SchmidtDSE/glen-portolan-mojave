@@ -5,31 +5,6 @@ Each entry is a temporary workaround and the change that retires it. Done when e
 The hacks are grouped by what they wait on. When a blocker clears, run its check, remove every
 hack in its group together, then do the re-test listed for that group.
 
-## Blocked on fire-recovery-backend re-running Eureka
-
-**Blocker:** the Eureka collection has no `renders` and no collection title, and it puts all three
-indices in one `severity` item. The backend plans one item per index (see `PORTOLAN_UPDATES_V2.md`).
-
-**Check it has cleared:** the collection or its items carry `renders`, and the items are `dnbr`,
-`rdnbr` and `rbr`.
-
-| Hack | Why | Remove by |
-|---|---|---|
-| Eureka severity: per-asset `rescale` (dNBR `-0.1,0.66`, RdNBR `0,0.8`, RBR `0,0.5`), `colormap: rdylgn_r` and `display_name` | Without `renders` the assets say `viridis`, and outliers in the band statistics (e.g. RBR max 204.6) make the default stretch draw one solid colour | Shrinking the entry to the URL plus the new item list |
-
-**Untested:** Rung 1's checks haven't been run in a browser: the three indices drawing with
-sensible colours over the perimeter, and the chat switching and recolouring them. Run them now,
-and again after the re-run, since the layer ids change with the item layout.
-
-## Blocked on the backend publishing fire perimeters
-
-**Blocker:** the fire's own catalog has no perimeter; it waits on the backend's `geometry_kind`
-request field.
-
-| Hack | Why | Remove by |
-|---|---|---|
-| Eureka perimeter comes from CAL FIRE's statewide `firep` collection, filtered to `FIRE_NAME == "EUREKA"` and `YEAR_ == 2025` | No perimeter in the fire's catalog. The filter's types match the tiles (`FIRE_NAME` string, `YEAR_` number; checked 2026-11-14) | Pointing the perimeter entry at the fire's own perimeter and dropping the filter |
-
 ## Blocked on glen core
 
 **Blocker:** glen draws item assets only when `items` names them, and its MCP plugin lists only
@@ -38,7 +13,8 @@ collection-level Parquet `data` assets for SQL.
 | Hack | Why | Remove by |
 |---|---|---|
 | Every layer listed under `items` (vegetation and Eureka severity) | Both catalogs keep their data in items. glen core draws item assets only when `items` names them (needs glen ≥ v3.51.1, hence the pin bump) | glen drawing item assets without config, or the catalogs publishing collection-level assets |
-| SQL sees no vegetation or severity tables (only the CAL FIRE `firep.parquet`) | The vegetation Parquet files are item assets, and severity is COG only | glen listing item Parquet assets for the vegetation tables; Rung 2's `zonal_stats` for the severity COGs |
+| `system-prompt.md` lists the data paths (severity COGs, perimeter, hex tables, vegetation, boundary), with their CRS | glen lists only collection-level Parquet for SQL, so the model can't find the vegetation Parquet, and it spends steps looking up the rest | glen listing item Parquet assets. The fire's paths stay in the prompt until glen's catalog listing gives the model what it needs in one step |
+| `system-prompt.md` replaces glen's base prompt (copied from v3.51.1's `core/system-prompt.md` and changed) | The base prompt says the map "cannot run queries or compute new numbers", which contradicts the SQL tools, and has no place for the demo's rules | glen's base prompt allowing an app section to be appended, or knowing when SQL tools are present. Until then, compare this file with glen's base prompt whenever the pin moves |
 
 ## Blocked on geo-query-wasm releasing the `zonal_stats` changes
 

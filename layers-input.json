@@ -10,44 +10,35 @@
     },
     "collections": [
         {
-            "url": "https://storage.googleapis.com/dse-nps-fire-severity-storage/v2/fires/eureka-9c3382ee/eureka-9c3382ee/collection.json",
+            "url": "https://storage.googleapis.com/dse-nps-fire-severity-storage/v2/fires/eureka-badc3220/eureka-badc3220/collection.json",
             "display_name": "Eureka fire burn severity",
             "group": "Eureka fire (2025)",
-            "colormap": "rdylgn_r",
             "items": [
                 {
-                    "id": "severity",
+                    "id": "rbr",
                     "assets": [
-                        {
-                            "id": "rbr",
-                            "display_name": "Burn severity: RBR",
-                            "visible": true,
-                            "rescale": "0,0.5"
-                        },
-                        {
-                            "id": "dnbr",
-                            "display_name": "Burn severity: dNBR",
-                            "rescale": "-0.1,0.66"
-                        },
-                        {
-                            "id": "rdnbr",
-                            "display_name": "Burn severity: RdNBR",
-                            "rescale": "0,0.8"
-                        }
+                        { "id": "rbr", "display_name": "Burn severity: RBR", "visible": true }
+                    ]
+                },
+                {
+                    "id": "dnbr",
+                    "assets": [
+                        { "id": "dnbr", "display_name": "Burn severity: dNBR" }
+                    ]
+                },
+                {
+                    "id": "rdnbr",
+                    "assets": [
+                        { "id": "rdnbr", "display_name": "Burn severity: RdNBR" }
                     ]
                 }
             ]
         },
         {
-            "url": "https://s3-west.nrp-nautilus.io/public-fire/calfire-2025/firep/stac-collection.json",
-            "id": "eureka-perimeter",
-            "display_name": "Eureka fire perimeter (CAL FIRE)",
+            "url": "https://storage.googleapis.com/dse-nps-fire-severity-storage/v2/fires/eureka-badc3220/eureka-badc3220-perimeter/collection.json",
+            "display_name": "Eureka fire perimeter",
             "group": "Eureka fire (2025)",
             "visible": true,
-            "default_filter": ["all",
-                ["==", ["get", "FIRE_NAME"], "EUREKA"],
-                ["==", ["get", "YEAR_"], 2025]
-            ],
             "default_style": {
                 "fill-color": "#000000",
                 "fill-opacity": 0
@@ -57,11 +48,7 @@
                 "line-width": 2
             },
             "tooltip": [
-                "FIRE_NAME",
-                "YEAR_",
-                "ALARM_DATE",
-                "GIS_ACRES",
-                "UNIT_ID"
+                "fire_event_name"
             ]
         },
         {
@@ -127,23 +114,38 @@
                                 "https://s3-west.nrp-nautilus.io/",
                                 "https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/",
                                 "https://data.source.coop/",
-                                "https://storage.googleapis.com/dse-nps-fire-severity-storage/"
+                                "https://storage.googleapis.com/dse-nps-fire-severity-storage/",
+                                "https://jotr-nps-portolan.org/"
                             ]
                         },
                         "include": [
                             "query",
-                            "zonal_stats"
+                            "zonal_stats",
+                            "register_hex_tiles",
+                            "get_hex_tile_status"
                         ]
                     }
                 ]
             }
+        },
+        "https://cdn.jsdelivr.net/gh/SchmidtDSE/glen@v3.51.1/core/plugins/charts.js",
+        {
+            "url": "https://cdn.jsdelivr.net/gh/SchmidtDSE/glen@v3.51.1/core/plugins/hex.js",
+            "options": {
+                "geo_query_wasm": "v0.6.0"
+            }
         }
     ],
+    "system_prompt_url": "system-prompt.md",
     "auto_approve": true,
     "llm": {
         "user_provided": true,
         "default_endpoint": "https://openrouter.ai/api/v1",
         "models": [
+            {
+                "value": "z-ai/glm-5.3-flash",
+                "label": "GLM-5.3 Flash"
+            },
             {
                 "value": "~deepseek/deepseek-v4-flash-latest",
                 "label": "DeepSeek V4 Flash"
@@ -153,21 +155,17 @@
                 "label": "Nemotron 3.5 Super"
             },
             {
-                "value": "z-ai/glm-5.3-flash",
-                "label": "GLM-5.3 Flash"
-            },
-            {
                 "value": "minimax/minimax-m3.1-flash",
                 "label": "MiniMax M3.1 Flash"
             }
         ]
     },
     "welcome": {
-        "message": "I can show, recolour and compare the Eureka fire (2025) burn-severity maps in Joshua Tree, and the Joshua Tree vegetation map. Try asking:",
+        "message": "I can map and measure the Eureka fire (2025) burn severity in Joshua Tree against the park's vegetation map. You choose the thresholds. Try asking:",
         "examples": [
-            "Switch from RBR to dNBR",
-            "Recolour the RBR layer with magma from 0 to 0.4",
-            "Show only the Joshua Tree Woodland Alliance polygons"
+            "Hectares with RBR ≥ 0.5 inside the Eureka perimeter, and their mean RBR",
+            "Chart hectares burned per vegetation class inside the perimeter, split at RBR 0.1 and 0.27",
+            "Mean RBR in Joshua Tree - California Juniper / Nevada Ephedra Woodland inside the perimeter"
         ]
     }
 }

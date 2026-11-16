@@ -213,12 +213,12 @@ The main dependency is the backend's step 5 (the resubmitted fires).
 | # | Work | Branch |
 |---|---|---|
 | 1a | Per-bin sum and an exact `pixel_rule` in the vendored geo-query-wasm, with tests and the upstream patch. **Done 2026-11-15**; browser check passed 2026-11-16 | `jotr-exact-zonal` |
-| 1b | Config: `charts.js`, `hex.js`, `register_hex_tiles` and `get_hex_tile_status`. Check against the current Eureka COG | `jotr-demo-config` |
+| 1b | Config: `charts.js`, `hex.js`, `register_hex_tiles` and `get_hex_tile_status`. Check against the current Eureka COG. **Done 2026-11-16** (config); browser checks under 1c | `jotr-demo-config` |
 | 1c | Browser checks (below). Their results decide whether the recipes need changing | `jotr-demo-config` |
-| 1d | System prompt via `system_prompt_url`: framing, breaks, method labels, and the route default once decided | `jotr-demo-config` |
+| 1d | System prompt via `system_prompt_url`: framing, breaks, method labels, and the route default once decided. **Drafted 2026-11-16** in `system-prompt.md`: exact `zonal_stats` is the only route for severity numbers until the hex tables exist | `jotr-demo-config` |
 | 1e | Early run of benchmark row 4 on the published v2 Eureka COG, with the EDA's `JOTR_VegPolys`. Proves the recipe; rerun in phase 2 | none |
 | 1f | SDM: the user downloads it; convert it and write a Portolan collection. Needs a host | `jotr-sdm` |
-| 1g | Fix AGENTS.md's out-of-date line on hex tiles | `jotr-demo-config` |
+| 1g | Fix AGENTS.md's out-of-date line on hex tiles. **Done 2026-11-16** | `jotr-demo-config` |
 
 **Upstream, in parallel, written up for the user to file** (in priority order):
 
@@ -228,6 +228,8 @@ The main dependency is the backend's step 5 (the resubmitted fires).
 4. glen: list item-level Parquet for SQL.
 5. glen: one discussion issue on charts from non-`query` tools, hex tool wording, and exact or
    approximate route language.
+6. glen: the base system prompt says the map "cannot run queries or compute new numbers" even
+   when SQL tools are loaded, and an app can only replace it, not add to it.
 
 **Demo workarounds if glen is slow:**
 
@@ -237,6 +239,33 @@ The main dependency is the backend's step 5 (the resubmitted fires).
   the vendored worker.
 
 **Phase 2: when the backend delivers step 5.**
+
+**Started 2026-11-16 with the resubmitted Eureka (`eureka-badc3220`):** severity per index with
+`renders`, the fire's own perimeter, and hex tables at r8, r12 and r13. The config and prompt
+point at it on `jotr-demo-config`; the CAL FIRE perimeter and per-asset `rescale` hacks are gone.
+
+Reference answers, computed outside the app (exact = shapely area of each pixel square inside
+the zone; hex = cells whose centre is inside, area by `h3_cell_area`). RBR, zones clipped to the
+perimeter, hectares:
+
+| Zone | Exact | Centre | r13 | r12 | Exact ha with RBR ≥ 0.27 | r13 |
+|---|---|---|---|---|---|---|
+| Perimeter | 86.44 | 86.28 | 86.51 | 86.62 | 24.63 | 24.59 |
+| Singleleaf Pinyon / Muller Oak | 49.76 | 49.76 | 49.78 | 49.92 | 12.16 | 12.22 |
+| Joshua Tree - California Juniper / Nevada Ephedra | 18.77 | 18.64 | 18.80 | 18.99 | 10.49 | 10.43 |
+| Muller Oak - California Buckwheat - Narrowleaf Goldenbush | 9.74 | 9.88 | 9.75 | 9.76 | 0.91 | 0.87 |
+| California Juniper / Blackbush | 4.63 | 4.56 | 4.59 | 4.51 | 0.81 | 0.81 |
+| Red Brome - Mediterranean Grass | 2.69 | 2.60 | 2.71 | 2.67 | 0.00 | 0.00 |
+| Mojave Yucca - Blackbush | 0.67 | 0.60 | 0.68 | 0.63 | 0.18 | 0.18 |
+| Joshua Tree / Blackbush | 0.21 | 0.24 | 0.20 | 0.14 | 0.08 | 0.07 |
+
+- Perimeter: exact mean RBR 0.216; bins below 0.1, 0.1–0.27 and from 0.27 are 10.70, 51.10 and
+  24.63 ha. One pixel has RBR ≥ 0.5 (0.517), 0.04 ha. The old run had 6.
+- r13 is within about 1 % of exact for every class above 1 ha. r12 drifts by up to a third on
+  the smallest class.
+- `h3_polygon_wkt_to_cells` returns no cells for a MULTIPOLYGON, so the hex recipe splits zones
+  with `ST_Dump` first.
+
 
 - Swap in the resubmitted Eureka and add Black Rock, with their perimeter and hex collections.
 - Retire the CAL FIRE perimeter hack, and the per-asset `rescale` and `colormap` if the new
