@@ -112,8 +112,9 @@ curl -s https://cdn.jsdelivr.net/gh/SchmidtDSE/geo-query-wasm@<tag>/src/zonal.js
 
 - **2026-11-15, `histogram`:** the unit tests pass, and in a browser "area with RBR ≥ 0.5 inside
   the perimeter" gave 6 pixels under both the centre rule and `pixel_rule: "area"`.
-- **The per-bin sum and mean, and `pixel_rule: "exact"`:** the unit tests pass (40 in
-  `zonal.test.js`). Not yet run in a browser.
+- **2026-11-16, the per-bin sum and mean, and `pixel_rule: "exact"`:** the unit tests pass (40
+  in `zonal.test.js`). In a browser, the same question under the exact rule gave 6.0 pixels with
+  mean RBR 0.526, and the total coverage (86.47 ha) matched the perimeter's area to within 0.06 %.
 
 Re-test after removing the hack: the same question should give the same answers under all three
 rules.

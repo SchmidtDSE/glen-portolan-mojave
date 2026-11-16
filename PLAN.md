@@ -208,7 +208,7 @@ The main dependency is the backend's step 5 (the resubmitted fires).
 
 | # | Work | Branch |
 |---|---|---|
-| 1a | Per-bin sum and an exact `pixel_rule` in the vendored geo-query-wasm, with tests and the upstream patch. **Done 2026-11-15** (unit tests); browser check below | `jotr-exact-zonal` |
+| 1a | Per-bin sum and an exact `pixel_rule` in the vendored geo-query-wasm, with tests and the upstream patch. **Done 2026-11-15**; browser check passed 2026-11-16 | `jotr-exact-zonal` |
 | 1b | Config: `charts.js`, `hex.js`, `register_hex_tiles` and `get_hex_tile_status`. Check against the current Eureka COG | `jotr-demo-config` |
 | 1c | Browser checks (below). Their results decide whether the recipes need changing | `jotr-demo-config` |
 | 1d | System prompt via `system_prompt_url`: framing, breaks, method labels, and the route default once decided | `jotr-demo-config` |
@@ -295,6 +295,15 @@ In order, each a PR to their `dev`:
 - **Browser check** for the new features. Under each of the three rules, ask "area with
   RBR ≥ 0.5 inside the Eureka perimeter, and the mean RBR of those pixels". Expect 6 pixels at
   the centre rule, and a `mean` column in the histogram rows.
+  - **Result, 2026-11-16: passed** for the exact rule. 9 steps, 53 s. RBR ≥ 0.5 gave 6.0
+    pixels (0.24 ha), mean RBR 0.526 (sum 3.155). Below 0.5 gave 2,155.81 pixels, mean 0.232.
+    The six pixels lie wholly inside the perimeter, so all three rules agree on them.
+  - Total coverage is 2,161.81 pixels (86.47 ha). The perimeter's own figure is 213.8 acres
+    (86.52 ha), so the two agree to within 0.06 %. That figure was probably computed in another
+    projection.
+  - **Seen again:** the model called the patch "high-severity" (for 1d). It also called
+    `zonal_stats` twice, the second time only to get JSON, and ran five `query` steps first.
+    The 1d recipe should cut those.
 - Run benchmark row 4 in a browser for Eureka and Black Rock:
   - hectares and mean RBR by `MapUnit_Name`, within RBR > 0 (`breaks: [1e-9]`);
   - under the centre, area and exact rules.
