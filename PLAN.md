@@ -213,12 +213,12 @@ The main dependency is the backend's step 5 (the resubmitted fires).
 | # | Work | Branch |
 |---|---|---|
 | 1a | Per-bin sum and an exact `pixel_rule` in the vendored geo-query-wasm, with tests and the upstream patch. **Done 2026-11-15**; browser check passed 2026-11-16 | `jotr-exact-zonal` |
-| 1b | Config: `charts.js`, `hex.js`, `register_hex_tiles` and `get_hex_tile_status`. Check against the current Eureka COG | `jotr-demo-config` |
+| 1b | Config: `charts.js`, `hex.js`, `register_hex_tiles` and `get_hex_tile_status`. Check against the current Eureka COG. **Done 2026-11-16** (config); browser checks under 1c | `jotr-demo-config` |
 | 1c | Browser checks (below). Their results decide whether the recipes need changing | `jotr-demo-config` |
-| 1d | System prompt via `system_prompt_url`: framing, breaks, method labels, and the route default once decided | `jotr-demo-config` |
+| 1d | System prompt via `system_prompt_url`: framing, breaks, method labels, and the route default once decided. **Drafted 2026-11-16** in `system-prompt.md`: exact `zonal_stats` is the only route for severity numbers until the hex tables exist | `jotr-demo-config` |
 | 1e | Early run of benchmark row 4 on the published v2 Eureka COG, with the EDA's `JOTR_VegPolys`. Proves the recipe; rerun in phase 2 | none |
 | 1f | SDM: the user downloads it; convert it and write a Portolan collection. Needs a host | `jotr-sdm` |
-| 1g | Fix AGENTS.md's out-of-date line on hex tiles | `jotr-demo-config` |
+| 1g | Fix AGENTS.md's out-of-date line on hex tiles. **Done 2026-11-16** | `jotr-demo-config` |
 
 **Upstream, in parallel, written up for the user to file** (in priority order):
 
@@ -228,6 +228,8 @@ The main dependency is the backend's step 5 (the resubmitted fires).
 4. glen: list item-level Parquet for SQL.
 5. glen: one discussion issue on charts from non-`query` tools, hex tool wording, and exact or
    approximate route language.
+6. glen: the base system prompt says the map "cannot run queries or compute new numbers" even
+   when SQL tools are loaded, and an app can only replace it, not add to it.
 
 **Demo workarounds if glen is slow:**
 

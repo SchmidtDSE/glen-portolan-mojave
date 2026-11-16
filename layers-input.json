@@ -127,18 +127,29 @@
                                 "https://s3-west.nrp-nautilus.io/",
                                 "https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/",
                                 "https://data.source.coop/",
-                                "https://storage.googleapis.com/dse-nps-fire-severity-storage/"
+                                "https://storage.googleapis.com/dse-nps-fire-severity-storage/",
+                                "https://jotr-nps-portolan.org/"
                             ]
                         },
                         "include": [
                             "query",
-                            "zonal_stats"
+                            "zonal_stats",
+                            "register_hex_tiles",
+                            "get_hex_tile_status"
                         ]
                     }
                 ]
             }
+        },
+        "https://cdn.jsdelivr.net/gh/SchmidtDSE/glen@v3.51.1/core/plugins/charts.js",
+        {
+            "url": "https://cdn.jsdelivr.net/gh/SchmidtDSE/glen@v3.51.1/core/plugins/hex.js",
+            "options": {
+                "geo_query_wasm": "v0.6.0"
+            }
         }
     ],
+    "system_prompt_url": "system-prompt.md",
     "auto_approve": true,
     "llm": {
         "user_provided": true,
@@ -163,11 +174,11 @@
         ]
     },
     "welcome": {
-        "message": "I can show, recolour and compare the Eureka fire (2025) burn-severity maps in Joshua Tree, and the Joshua Tree vegetation map. Try asking:",
+        "message": "I can map and measure the Eureka fire (2025) burn severity in Joshua Tree against the park's vegetation map. You choose the thresholds. Try asking:",
         "examples": [
-            "Switch from RBR to dNBR",
-            "Recolour the RBR layer with magma from 0 to 0.4",
-            "Show only the Joshua Tree Woodland Alliance polygons"
+            "Hectares with RBR ≥ 0.5 inside the Eureka perimeter, and their mean RBR",
+            "Chart hectares burned per vegetation class inside the perimeter, split at RBR 0.1 and 0.27",
+            "Mean RBR in Joshua Tree - California Juniper / Nevada Ephedra Woodland inside the perimeter"
         ]
     }
 }

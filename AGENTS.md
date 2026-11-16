@@ -103,7 +103,7 @@ The first model is the default. Keep to models that OpenRouter serves through a 
 |---|---|
 | `worker` | The worker file, relative to the page |
 | `worker_config` | geo-query-wasm's worker options, such as `allowedDirectories`, `allowedEndpoints`, `timeout` and `workers`. A list given here replaces geo-query-wasm's default list |
-| `include` or `exclude` | Tool names to keep or drop. Keep `include: ["query"]`: glen core cannot draw geo-query-wasm's hex tiles, and the plugin answers the catalog tools itself |
+| `include` or `exclude` | Tool names to keep or drop. Start from `include: ["query"]`, since the plugin answers the catalog tools itself. Add `register_hex_tiles` and `get_hex_tile_status` together with glen core's `plugins/hex.js` (glen ≥ v3.51.1), which draws geo-query-wasm's hex tiles |
 | `prompt` | An MCP prompt to append to the system prompt, such as `geospatial-analyst` |
 
 The plugin lists every collection's Parquet `data` asset in the system prompt. By default the SQL reads any `s3://` path and https URLs on source.coop and NRP. For a catalog hosted elsewhere, add its host to `allowedEndpoints` (S3 hosts a query names with `s3_endpoint`, the route `get_schema` gives for other hosts) or `allowedDirectories` (paths SQL may read). Check a new catalog's data host before relying on SQL.

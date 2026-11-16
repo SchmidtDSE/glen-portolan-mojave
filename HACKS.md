@@ -38,7 +38,8 @@ collection-level Parquet `data` assets for SQL.
 | Hack | Why | Remove by |
 |---|---|---|
 | Every layer listed under `items` (vegetation and Eureka severity) | Both catalogs keep their data in items. glen core draws item assets only when `items` names them (needs glen ≥ v3.51.1, hence the pin bump) | glen drawing item assets without config, or the catalogs publishing collection-level assets |
-| SQL sees no vegetation or severity tables (only the CAL FIRE `firep.parquet`) | The vegetation Parquet files are item assets, and severity is COG only | glen listing item Parquet assets for the vegetation tables; Rung 2's `zonal_stats` for the severity COGs |
+| `system-prompt.md` lists the vegetation, boundary, perimeter and severity paths, with their CRS | glen lists only collection-level Parquet for SQL, so without the table the model can't find the vegetation Parquet and spends steps searching for the rest | glen listing item Parquet assets. Then drop the vegetation and boundary rows from the table. Drop the severity and perimeter rows when the backend's resubmitted catalogs replace them (phase 2) |
+| `system-prompt.md` replaces glen's base prompt (copied from v3.51.1's `core/system-prompt.md` and changed) | The base prompt says the map "cannot run queries or compute new numbers", which contradicts the SQL tools, and has no place for the demo's rules | glen's base prompt allowing an app section to be appended, or knowing when SQL tools are present. Until then, compare this file with glen's base prompt whenever the pin moves |
 
 ## Blocked on geo-query-wasm releasing the `zonal_stats` changes
 
