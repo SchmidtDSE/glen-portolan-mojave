@@ -24,11 +24,15 @@ listed in `HACKS.md`.
       row (`exactCoverage`).
     - It is faster than the 64-point `"area"` rule: about 21 ms against 300 ms for a
       2,000-vertex zone over a million pixels, in Node.
+  - **Hectares beside counts.** When the raster's CRS is in true ground metres (UTM zones and
+    common equal-area systems, not Web Mercator), every row with a count also has `hectares`, and
+    the tool's output states the pixel area. Models converted pixel counts to hectares by hand and
+    sometimes got it 10× wrong; now they read the column.
 - **`zonal-stats.patch`:** the full diff against v0.6.0, including the README lines and the tests
   in `test/zonal.test.js` (not copied here). Apply it to a geo-query-wasm checkout with
   `git apply` to open the upstream PR.
-  - In that checkout, `test/zonal.test.js` passes all 40 tests.
-  - The whole suite passes (114 tests) under Node 20. Under Node 18, `test/hex.test.js` fails
+  - In that checkout, `test/zonal.test.js` passes all 44 tests.
+  - The whole suite passes (118 tests) under Node 20. Under Node 18, `test/hex.test.js` fails
     on v0.6.0 itself, because Node 18 has no global `crypto`.
 
 Don't edit `src/` here except by changing the patch to match. To remove this copy, see the

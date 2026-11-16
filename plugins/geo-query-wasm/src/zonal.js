@@ -273,6 +273,23 @@ export function chooseLevel(levels, windows, maxPixels) {
     return null;
 }
 
+// Projected CRSs whose metres are true ground metres over a zone: UTM zones
+// (WGS 84, NAD83, ETRS89) and common equal-area systems. Web Mercator has
+// metre units but not true areas, so it is left out.
+const AREA_TRUE_METRES = [[32601, 32660], [32701, 32760], [26901, 26923], [25828, 25838],
+    [5070, 5070], [3310, 3310], [3035, 3035], [6933, 6933], [2163, 2163], [9822, 9822]];
+
+/**
+ * A full-resolution pixel's area in square metres, or null when the raster's
+ * CRS is not one whose units are true ground metres (see AREA_TRUE_METRES).
+ */
+export function pixelAreaM2(geoKeys = {}, [rx, ry] = []) {
+    const code = geoKeys.ProjectedCSTypeGeoKey;
+    if (!Number.isInteger(code) || !AREA_TRUE_METRES.some(([a, b]) => code >= a && code <= b)) return null;
+    const area = Math.abs(rx * ry);
+    return Number.isFinite(area) && area > 0 ? area : null;
+}
+
 /**
  * The raster's CRS from its GeoKeys as `EPSG:<code>`, or null when it is
  * user-defined (code 32767) or missing.
@@ -338,7 +355,7 @@ export function zonesSql(sql, zonesCrs, crs) {
  *   pixelRule  'centre' (default), 'area' or 'exact'
  *   maxPixels  cap on pixels read, summed over the zones' windows
  *   breaks     increasing numbers, for the 'histogram' stat
- * @returns {{ rows, level, scale, pixels, notes }}
+ * @returns {{ rows, level, scale, pixels, pixelArea, notes }} - pixelArea in m², or null
  */
 export async function zonalStats(tiff, zones, { band = 1, stats = ['sum', 'mean', 'count'], pixelRule = 'centre', maxPixels = MAX_PIXELS, breaks = null } = {}) {
     const histogram = stats.includes('histogram');
@@ -351,6 +368,9 @@ export async function zonalStats(tiff, zones, { band = 1, stats = ['sum', 'mean'
     if (!Number.isInteger(band) || band < 1 || band > bands) throw new Error(`band must be 1 to ${bands}`);
     const [ox, oy] = base.getOrigin();
     const [rx, ry] = base.getResolution();
+    // Hectares go beside each count when a pixel's area is known in metres.
+    const m2 = pixelAreaM2(base.getGeoKeys?.() ?? {}, [rx, ry]);
+    const withHa = (row, covered) => (m2 ? { ...row, hectares: covered == null ? null : round(covered * m2 / 1e4) } : row);
     const W = base.getWidth();
     const H = base.getHeight();
     const count = await tiff.getImageCount();
@@ -401,20 +421,20 @@ export async function zonalStats(tiff, zones, { band = 1, stats = ['sum', 'mean'
         if (histogram) {
             const bounds = binBounds(breaks);
             for (let k = 0; k < bounds.length; k++) {
-                rows.push({
+                rows.push(withHa({
                     id,
                     ...bounds[k],
                     count: rings ? round(s.bins[k] * scale) : null,
                     sum: rings ? round(s.binSums[k] * scale) : null,
                     mean: s.bins[k] > 0 ? round(s.binSums[k] / s.bins[k]) : null,
-                });
+                }, rings ? s.bins[k] * scale : null));
             }
             continue;
         }
         if (classes) {
             const entries = [...s.counts].sort((a, b) => a[0] - b[0]);
-            for (const [value, c] of entries) rows.push({ id, value, count: round(c * scale) });
-            if (!rings) rows.push({ id, value: null, count: null });
+            for (const [value, c] of entries) rows.push(withHa({ id, value, count: round(c * scale) }, c * scale));
+            if (!rings) rows.push(withHa({ id, value: null, count: null }, null));
             continue;
         }
         const row = { id };
@@ -425,7 +445,7 @@ export async function zonalStats(tiff, zones, { band = 1, stats = ['sum', 'mean'
             if (k === 'max') row.max = s.max;
             if (k === 'count') row.count = rings ? round(s.count * scale) : null;
         }
-        rows.push(row);
+        rows.push(stats.includes('count') ? withHa(row, rings ? s.count * scale : null) : row);
     }
 
     const notes = [];
@@ -435,7 +455,7 @@ export async function zonalStats(tiff, zones, { band = 1, stats = ['sum', 'mean'
         notes.push(`Read at overview ${chosen.index} (${level.width} × ${level.height} pixels, ${Math.round(Math.sqrt(scale))}× coarser than full resolution), `
             + `because full resolution needs more than ${maxPixels.toLocaleString('en-US')} pixels. Sums and counts are scaled to full-resolution pixels; all values are approximate.`);
     }
-    return { rows, level: chosen.index, scale, pixels: chosen.pixels, notes };
+    return { rows, level: chosen.index, scale, pixels: chosen.pixels, pixelArea: m2, notes };
 }
 
 const round = (v) => (Number.isFinite(v) ? Math.round(v * 1e6) / 1e6 : v);
@@ -461,8 +481,10 @@ export const ZONAL_STATS = [
     '- `breaks`: for `stats: ["histogram"]`, increasing cut points. n breaks make n + 1 bins: below the first, between',
     '  each pair (lower bound included), and at or above the last. One row per zone and bin gives `lower`, `upper` (null',
     '  for an open end), `count` (pixels), `sum` (of the values) and `mean` (of the values in the bin). For "pixels with',
-    '  value >= 0.5" pass `breaks: [0.5]` and read the last bin; its `mean` is the mean of those pixels. Multiply a count',
-    '  by the pixel area for an area.',
+    '  value >= 0.5" pass `breaks: [0.5]` and read the last bin; its `mean` is the mean of those pixels.',
+    '',
+    'Areas: when the raster\'s coordinate system is in true ground metres (UTM or a common equal-area system), every row with',
+    'a count also has `hectares` (the count times the pixel area). Report that column; don\'t convert counts yourself.',
     '',
     'One call reads at most a fixed number of pixels. Larger zones are read from a coarser overview, and the result says so;',
     'sums and counts are then scaled to full-resolution pixels and approximate.',
@@ -563,6 +585,7 @@ export function createZonalStats({ open, query, allowed, catalog, maxPixels = MA
             area: 'pixels weighted by the share inside each zone, estimated from 64 points',
             exact: 'pixels weighted by the exact share inside each zone, as exactextract',
         }[pixelRule];
-        return [format(out.rows), '', `Pixel rule: ${rule}. Raster CRS: ${crs}.`, ...out.notes].join('\n');
+        const area = out.pixelArea ? ` Pixel area: ${round(out.pixelArea)} m²; \`hectares\` is the covered pixel count × that area.` : '';
+        return [format(out.rows), '', `Pixel rule: ${rule}. Raster CRS: ${crs}.${area}`, ...out.notes].join('\n');
     };
 }
