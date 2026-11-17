@@ -14,8 +14,6 @@ collection-level Parquet `data` assets for SQL.
 |---|---|---|
 | Every layer listed under `items` (vegetation and both fires' severity) | Both catalogs keep their data in items. glen core draws item assets only when `items` names them (needs glen ≥ v3.51.1, hence the pin bump) | glen drawing item assets without config, or the catalogs publishing collection-level assets |
 | `system-prompt.md` lists the data paths (severity COGs, perimeter, hex tables, vegetation, boundary), with their CRS | glen lists only collection-level Parquet for SQL, so the model can't find the vegetation Parquet, and it spends steps looking up the rest | glen listing item Parquet assets. The fire's paths stay in the prompt until glen's catalog listing gives the model what it needs in one step |
-| `system-prompt.md` replaces glen's base prompt (copied from v3.51.1's `core/system-prompt.md` and changed) | The base prompt says the map "cannot run queries or compute new numbers", which contradicts the SQL tools, and has no place for the demo's rules | glen's base prompt allowing an app section to be appended, or knowing when SQL tools are present. Until then, compare this file with glen's base prompt whenever the pin moves |
-
 ## Blocked on geo-query-wasm releasing the `zonal_stats` changes
 
 **Blocker:** `zonal_stats` in geo-query-wasm v0.6.0 lacks four things the demo needs:
