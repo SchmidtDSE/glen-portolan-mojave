@@ -17,7 +17,7 @@
                 {
                     "id": "rbr",
                     "assets": [
-                        { "id": "rbr", "display_name": "Eureka: RBR", "visible": true }
+                        { "id": "rbr", "display_name": "Eureka: RBR", "visible": true, "rescale": "0,0.65" }
                     ]
                 },
                 {
@@ -59,7 +59,7 @@
                 {
                     "id": "rbr",
                     "assets": [
-                        { "id": "rbr", "display_name": "Black Rock: RBR", "visible": true }
+                        { "id": "rbr", "display_name": "Black Rock: RBR", "visible": true, "rescale": "0,0.65" }
                     ]
                 },
                 {
@@ -125,7 +125,8 @@
                     },
                     "outline_style": {
                         "line-color": "#5D4037",
-                        "line-width": 2
+                        "line-width": 2,
+                        "line-opacity": 0.5
                     },
                     "tooltip": [
                         "MapUnit_Name",
@@ -143,7 +144,7 @@
     },
     "plugins": [
         {
-            "url": "https://cdn.jsdelivr.net/gh/SchmidtDSE/glen@v3.51.1/core/plugins/mcp.js",
+            "url": "https://cdn.jsdelivr.net/gh/SchmidtDSE/glen@v4.0.6/core/plugins/mcp.js",
             "options": {
                 "servers": [
                     {
@@ -170,9 +171,9 @@
                 ]
             }
         },
-        "https://cdn.jsdelivr.net/gh/SchmidtDSE/glen@v3.51.1/core/plugins/charts.js",
+        "https://cdn.jsdelivr.net/gh/SchmidtDSE/glen@v4.0.6/core/plugins/charts.js",
         {
-            "url": "https://cdn.jsdelivr.net/gh/SchmidtDSE/glen@v3.51.1/core/plugins/hex.js",
+            "url": "https://cdn.jsdelivr.net/gh/SchmidtDSE/glen@v4.0.6/core/plugins/hex.js",
             "options": {
                 "geo_query_wasm": "v0.6.0"
             }
@@ -205,9 +206,10 @@
     "welcome": {
         "message": "I can map and measure burn severity for the Eureka and Black Rock fires (2025) in Joshua Tree against the park's vegetation map. You choose the thresholds. Try asking:",
         "examples": [
+            "Show me just the pinyon pine associations in the park",
+            "Show me areas where RBR was over 0.45 in both fires",
             "Exact hectares with RBR ≥ 0.5 inside each fire's perimeter, and their mean RBR",
-            "Chart exact hectares per vegetation class inside the Black Rock perimeter, split at RBR 0.1 and 0.27",
-            "Map where RBR ≥ 0.27 in Joshua tree woodland in both fires, as r13 hex tiles"
+            "Chart exact hectares per vegetation class inside the Black Rock perimeter, split at RBR 0.1 and 0.27"
         ]
     }
 }
