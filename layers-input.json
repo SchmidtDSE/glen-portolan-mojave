@@ -94,43 +94,33 @@
             ]
         },
         {
-            "url": "https://jotr-nps-portolan.org/jotr-vegmap/collection.json",
+            "url": "https://jotr-nps-portolan.org/vegetation-map/collection.json",
             "display_name": "JOTR vegetation map",
+            "group": "Joshua Tree NP",
+            "items": [
+                {
+                    "id": "vegetation-map",
+                    "display_name": "Vegetation map units",
+                    "visible": true,
+                    "tooltip": [
+                        "MapUnit_Name",
+                        "MapUnit_ID",
+                        "Acres"
+                    ]
+                }
+            ]
+        },
+        {
+            "url": "https://jotr-nps-portolan.org/park-boundary/collection.json",
+            "display_name": "JOTR park boundary",
             "group": "Joshua Tree NP",
             "items": [
                 {
                     "id": "park-boundary",
                     "display_name": "Park boundary",
                     "visible": true,
-                    "default_style": {
-                        "fill-color": "#000000",
-                        "fill-opacity": 0
-                    },
-                    "outline_style": {
-                        "line-color": "#5D4037",
-                        "line-width": 2
-                    },
                     "tooltip": [
                         "Park_Name",
-                        "Acres"
-                    ]
-                },
-                {
-                    "id": "vegetation-map",
-                    "display_name": "Vegetation map units",
-                    "visible": true,
-                    "default_style": {
-                        "fill-color": "#000000",
-                        "fill-opacity": 0
-                    },
-                    "outline_style": {
-                        "line-color": "#5D4037",
-                        "line-width": 2,
-                        "line-opacity": 0.5
-                    },
-                    "tooltip": [
-                        "MapUnit_Name",
-                        "MapUnit_ID",
                         "Acres"
                     ]
                 }
