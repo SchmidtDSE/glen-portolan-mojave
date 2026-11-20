@@ -131,11 +131,16 @@ For the perimeter alone, `zones` is the perimeter in EPSG:4326 with no transform
 
 Use `register_hex_tiles` with SQL whose first column is the cell, e.g. the `cells` CTE above joined to the hex table with `WHERE h.rbr >= <t>`, returning `h13` and `rbr`, and `agg: "AVG"`. Then `add_hex_tile_layer` with the returned `tile_url_template` and `value_column: "rbr"`. `register_hex_tiles` can draw any value your SQL computes per cell, not only densities. For both fires on one map, build one tileset: `UNION ALL` the two fires' rows (Eureka's hex table and zones, then Black Rock's) in a single `register_hex_tiles` SQL.
 
-Colour the hexes exactly as the raster layer is coloured, so the two can be compared. In `add_hex_tile_layer`, always pass `palette: "ylorrd"`, `scale: "linear"`, and `value_stats` with the index's raster range at every resolution 0 to 15. The ranges are RBR 0 to 0.65, dNBR −0.1 to 0.66, RdNBR 0 to 0.8. For RBR:
+Colour the hexes exactly as the raster layer is coloured, so the two can be compared. Do it in two steps (a workaround until glen #520 and #521):
 
-```json
-"value_stats": {"by_res": {"0": {"min": 0, "max": 0.65}, "1": {"min": 0, "max": 0.65}, "2": {"min": 0, "max": 0.65}, "3": {"min": 0, "max": 0.65}, "4": {"min": 0, "max": 0.65}, "5": {"min": 0, "max": 0.65}, "6": {"min": 0, "max": 0.65}, "7": {"min": 0, "max": 0.65}, "8": {"min": 0, "max": 0.65}, "9": {"min": 0, "max": 0.65}, "10": {"min": 0, "max": 0.65}, "11": {"min": 0, "max": 0.65}, "12": {"min": 0, "max": 0.65}, "13": {"min": 0, "max": 0.65}, "14": {"min": 0, "max": 0.65}, "15": {"min": 0, "max": 0.65}}}
-```
+1. `add_hex_tile_layer` with `palette: "ylorrd"`. Don't pass `value_stats`.
+2. `set_style` on the `layer_id` it returns, with the `style` below for the index. These stops are the raster's colour map over its display range. Copy them exactly.
+
+- RBR (0 to 0.65): `{"fill-color":["interpolate",["linear"],["get","rbr"],0,"#ffffcc",0.081,"#ffeda0",0.163,"#fed976",0.244,"#feb24c",0.325,"#fd8d3c",0.406,"#fc4e2a",0.488,"#e31a1c",0.569,"#bd0026",0.65,"#800026"]}`
+- dNBR (−0.1 to 0.66): `{"fill-color":["interpolate",["linear"],["get","dnbr"],-0.1,"#ffffcc",-0.005,"#ffeda0",0.09,"#fed976",0.185,"#feb24c",0.28,"#fd8d3c",0.375,"#fc4e2a",0.47,"#e31a1c",0.565,"#bd0026",0.66,"#800026"]}`
+- RdNBR (0 to 0.8): `{"fill-color":["interpolate",["linear"],["get","rdnbr"],0,"#ffffcc",0.1,"#ffeda0",0.2,"#fed976",0.3,"#feb24c",0.4,"#fd8d3c",0.5,"#fc4e2a",0.6,"#e31a1c",0.7,"#bd0026",0.8,"#800026"]}`
+
+If a call doesn't give the map you wanted, correct it once. Never remove and re-add the same layer.
 
 ## Charts
 
